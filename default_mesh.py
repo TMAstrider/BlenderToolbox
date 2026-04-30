@@ -14,7 +14,7 @@ arguments = {
   "output_path": "./default_mesh.png",
   "image_resolution": [720, 720], # recommend >1080 for paper figures
   "number_of_samples": 200, # recommend >200 for paper figures
-  "mesh_path": "./meshes/spot.ply", # either .ply or .obj
+  "mesh_path": r"C:\Users\Nadine\Desktop\BlenderToolbox\meshes\20260427_current3_ours_nsh_multipull_casefix_multipull80k\models\Armadillo__407456ef\ours_mls.ply", # either .ply or .obj
   "mesh_position": (1.12, -0.14, 0), # UI: click mesh > Transform > Location
   "mesh_rotation": (90, 0, 227), # UI: click mesh > Transform > Rotation
   "mesh_scale": (1.5,1.5,1.5), # UI: click mesh > Transform > Scale

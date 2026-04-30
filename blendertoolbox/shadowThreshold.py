@@ -24,4 +24,11 @@ def shadowThreshold(alphaThreshold, interpolationMode = 'CARDINAL'):
     REND = tree.nodes["Render Layers"]
     OUT = tree.nodes["Composite"]
     tree.links.new(REND.outputs[1], RAMP.inputs[0])
-    tree.links.new(RAMP.outputs[1], OUT.inputs[1])
+    if len(OUT.inputs) > 1:
+        tree.links.new(RAMP.outputs[1], OUT.inputs[1])
+    else:
+        # Blender 4.5 removed the dedicated alpha socket on the Composite node.
+        set_alpha = tree.nodes.new('CompositorNodeSetAlpha')
+        tree.links.new(REND.outputs[0], set_alpha.inputs[0])
+        tree.links.new(RAMP.outputs[1], set_alpha.inputs[1])
+        tree.links.new(set_alpha.outputs[0], OUT.inputs[0])
