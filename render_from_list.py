@@ -46,11 +46,19 @@ def parse_args():
     p.add_argument("--adjust-root",  default=r"adjust_scenes")
     p.add_argument("--output-root",  required=True,
                    help="Base renders/ directory (output goes to <output-root>/<dataset_output_subdir>/<model>)")
-    p.add_argument("--preset-file",  default=r"render_presets\cycles_flat_ao_strip.json")
+    p.add_argument("--preset-dir",   default=r"render_presets")
+    p.add_argument("--preset-file",  default=r"render_presets\cycles_flat_ao_strip.json",
+                   help="Default preset when a row has no 'preset' column (fallback)")
     p.add_argument("--blender-exe",  default=BLENDER_EXE)
     p.add_argument("--render-script",  default="render_eval_set.py")
     p.add_argument("--export-script",  default="export_selected_transform.py")
     p.add_argument("--make-script",    default="make_adjust_scene.py")
+    p.add_argument("--force", action="store_true",
+                   help="Re-render all rows, ignoring rendered=done")
+    p.add_argument("--force-blend", action="store_true",
+                   help="Re-generate blend even for rows with blend=done")
+    p.add_argument("--dataset", default="",
+                   help="Only process these dataset(s), comma-separated (empty = all)")
     p.add_argument("--max-parallel", type=int, default=2)
     return p.parse_args()
 
@@ -71,6 +79,15 @@ def resolve_model_dir(meshes_root: Path, dataset: str, model: str, dataset_map: 
         ds_dir = ds["dir"] if isinstance(ds, dict) else ds
         return meshes_root / ds_dir / "models" / model
     return meshes_root / model
+
+
+def find_ours_ply(model_dir: Path, clean: bool = False) -> Path | None:
+    """Find the main mesh by `ours_` prefix (e.g. ours_mls.ply, ours_base_config.ply)."""
+    if clean:
+        candidates = sorted(model_dir.glob("ours_*_clean.ply"))
+    else:
+        candidates = sorted(p for p in model_dir.glob("ours_*.ply") if "_clean.ply" not in p.name)
+    return candidates[0] if candidates else None
 
 
 def get_dataset_output_subdir(dataset_map: dict | None, dataset: str) -> str:
@@ -177,19 +194,20 @@ def render_model(row: dict, repo_root: Path, blender_exe: Path, render_script: P
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if clean:
-        clean_ply = model_dir / "ours_mls_clean.ply"
-        if not clean_ply.exists():
-            return f"[WARN] {model}: clean=yes but ours_mls_clean.ply not found, skipping"
+        clean_ply = find_ours_ply(model_dir, clean=True)
+        if clean_ply is None:
+            return f"[WARN] {model}: clean=yes but no ours_*_clean.ply found, skipping"
+        target_name = clean_ply.name.replace("_clean.ply", ".ply")
         staging = output_dir / "_staging"
         staging.mkdir(exist_ok=True)
         import shutil
         for ply in model_dir.glob("*.ply"):
-            if ply.name == "ours_mls_clean.ply":
+            if ply.name == clean_ply.name:
                 continue
             dst = staging / ply.name
             if not dst.exists():
                 shutil.copy2(ply, dst)
-        shutil.copy2(clean_ply, staging / "ours_mls.ply")
+        shutil.copy2(clean_ply, staging / target_name)
         effective_model_dir = staging
     else:
         effective_model_dir = model_dir
@@ -232,9 +250,9 @@ def make_blend(row: dict, repo_root: Path, blender_exe: Path, make_script: Path,
     model_dir = resolve_model_dir(meshes_root, dataset, model, dataset_map)
     if model_dir is None or not model_dir.exists():
         return f"[WARN] {model}: model dir not found ({dataset=})"
-    ply = model_dir / ("ours_mls_clean.ply" if clean else "ours_mls.ply")
-    if not ply.exists():
-        return f"[WARN] {model}: mesh not found ({ply})"
+    ply = find_ours_ply(model_dir, clean=clean)
+    if ply is None:
+        return f"[WARN] {model}: no ours_*.ply found in {model_dir}"
 
     blend_out = adjust_root / dataset / model / f"{model}_ours_mls_{render_args.get('material','flat_ao')}.blend"
     blend_out.parent.mkdir(parents=True, exist_ok=True)
@@ -295,6 +313,16 @@ def create_ranked_strip(all_rows: list[dict], output_base: Path, dataset_map: di
         print(f"Ranked strip [{dataset}] ({len(images)} models) saved: {out_path}")
 
 
+def load_preset_for_row(row: dict, preset_dir: Path, default_render_args: dict) -> tuple[dict, dict]:
+    """Load render_args from a row-specific preset file, falling back to default."""
+    preset_name = (row.get("preset") or "").strip()
+    if preset_name:
+        preset_path = preset_dir / f"{preset_name}.json"
+        if preset_path.exists():
+            return load_preset(preset_path)
+    return default_render_args, {}
+
+
 def main():
     args = parse_args()
     repo_root       = Path.cwd()
@@ -305,6 +333,7 @@ def main():
     meshes_root     = (repo_root / args.meshes_root).resolve()
     adjust_root     = (repo_root / args.adjust_root).resolve()
     output_base     = (repo_root / args.output_root).resolve()
+    preset_dir      = (repo_root / args.preset_dir).resolve()
     preset_file     = (repo_root / args.preset_file).resolve()
     list_file       = (repo_root / args.list).resolve()
     dataset_map_path = (repo_root / args.dataset_map).resolve()
@@ -314,24 +343,39 @@ def main():
         dataset_map = json.loads(dataset_map_path.read_text(encoding="utf-8"))
         print(f"Loaded dataset map: {list(dataset_map.keys())}")
 
-    render_args, _ = load_preset(preset_file)
+    default_render_args, _ = load_preset(preset_file)
     output_base.mkdir(parents=True, exist_ok=True)
 
     with list_file.open(encoding="utf-8") as f:
         all_rows = list(csv.DictReader(f))
 
-    # skip rendered=done
-    todo_rows = [r for r in all_rows if (r.get("rendered") or "").strip().lower() != "done"]
+    # filter by dataset
+    if args.dataset:
+        selected = set(s.strip() for s in args.dataset.split(","))
+        all_rows = [r for r in all_rows if r["dataset"] in selected]
+        print(f"Dataset filter: {selected} -> {len(all_rows)} row(s)")
+
+    # skip rendered=done (unless --force)
+    if args.force:
+        todo_rows = list(all_rows)
+        print(f"--force: re-rendering all {len(todo_rows)} row(s)")
+    else:
+        todo_rows = [r for r in all_rows if (r.get("rendered") or "").strip().lower() != "done"]
     if not todo_rows:
         print("All models rendered — nothing to do.")
         create_ranked_strip(all_rows, output_base, dataset_map)
         return
 
-    # Phase 1: generate .blend for blend=todo
-    blend_todo = [r for r in todo_rows if (r.get("blend") or "").strip().lower() == "todo"]
+    # Phase 1: generate .blend for blend=todo (or all blend=done too if --force-blend)
+    if args.force_blend:
+        blend_todo = [r for r in todo_rows if (r.get("blend") or "").strip().lower() in ("todo", "done")]
+        print(f"--force-blend: regenerating blend for {len(blend_todo)} row(s)")
+    else:
+        blend_todo = [r for r in todo_rows if (r.get("blend") or "").strip().lower() == "todo"]
     if blend_todo:
         print(f"Generating {len(blend_todo)} blend(s)...")
         for row in blend_todo:
+            render_args, _ = load_preset_for_row(row, preset_dir, default_render_args)
             result = make_blend(row, repo_root, blender_exe, make_script,
                                meshes_root, adjust_root, render_args, dataset_map)
             print(result)
@@ -345,11 +389,13 @@ def main():
 
     print(f"Rendering {len(render_rows)} model(s) with max_parallel={args.max_parallel}")
     for r in render_rows:
-        print(f"  {r['dataset']}/{r['model']}  clean={r.get('clean','no')}")
+        preset_name = (r.get("preset") or "").strip() or "(default)"
+        print(f"  {r['dataset']}/{r['model']}  clean={r.get('clean','no')}  preset={preset_name}")
 
     futures = {}
     with ThreadPoolExecutor(max_workers=args.max_parallel) as ex:
         for row in render_rows:
+            render_args, _ = load_preset_for_row(row, preset_dir, default_render_args)
             f = ex.submit(render_model, row, repo_root, blender_exe, render_script,
                           export_script, meshes_root, adjust_root, output_base,
                           render_args, dataset_map)
