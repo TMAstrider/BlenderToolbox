@@ -8,9 +8,7 @@
   "datasets": {
     "manifold": {
       "enabled": true,
-      "methods": [
-        "ours"
-      ]
+      "methods": ["ours", "nsh", "multipull"]
     },
     "scene": {
       "enabled": false,
