@@ -1,0 +1,34 @@
+{
+  "description": "Portable no-shadow batch render preset. Edit datasets/methods to choose what gets rendered.",
+  "output_root": "renders",
+  "resolution": {
+    "x": 1100,
+    "y": 1100
+  },
+  "datasets": {
+    "manifold": {
+      "enabled": true,
+      "methods": [
+        "ours"
+      ]
+    },
+    "scene": {
+      "enabled": false,
+      "methods": [
+        "ours"
+      ]
+    },
+    "medial_skeleton": {
+      "enabled": false,
+      "methods": [
+        "ours"
+      ]
+    },
+    "gt": {
+      "enabled": false,
+      "methods": [
+        "ours"
+      ]
+    }
+  }
+}

@@ -119,9 +119,7 @@ For multiple tuned model folders, use:
 ```powershell
 python .\portable_render_batch_from_list.py `
   --list ".\render_presets\portable_noshadow_render_list.csv" `
-  --output-root ".\renders" `
-  --resolution-x 1100 `
-  --resolution-y 1100
+  --preset-file ".\render_presets\portable_noshadow_preset.json"
 ```
 
 Or run the wrapper:
@@ -142,14 +140,34 @@ Columns:
 - `model`: model folder/name
 - `rendered`: optional bookkeeping column
 
-Output directories are inferred by scanning:
+The preset controls datasets, methods, output root, and resolution:
 
-```text
-renders/*/<model>/*
+```json
+{
+  "output_root": "renders",
+  "resolution": { "x": 1100, "y": 1100 },
+  "datasets": {
+    "manifold": {
+      "enabled": true,
+      "methods": ["ours"]
+    },
+    "scene": {
+      "enabled": false,
+      "methods": ["ours"]
+    }
+  }
+}
 ```
 
-Every method folder containing `{model}_plastic.blend` is rendered. For example,
-this row:
+For each model in the CSV, output directories are inferred from the enabled
+dataset/method pairs:
+
+```text
+renders/<dataset>/<model>/<method>
+```
+
+Every method folder containing `{model}_plastic.blend` is rendered. With the
+default preset, this row:
 
 ```text
 Armadillo__407456ef
