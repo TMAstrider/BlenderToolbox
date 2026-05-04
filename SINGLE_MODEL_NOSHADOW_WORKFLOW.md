@@ -54,6 +54,12 @@ Typical final mode:
   --hide-ground
 ```
 
+Square 1100 px output:
+
+```powershell
+--resolution-x 1100 --resolution-y 1100
+```
+
 Optional material test color:
 
 ```powershell
@@ -100,7 +106,9 @@ foreach ($item in $items) {
     -P ".\render_portable_blend_transparent.py" -- `
     --blend "$dir\Armadillo__407456ef_$item.blend" `
     --output "$dir\Armadillo__407456ef_$item.png" `
-    --hide-ground
+    --hide-ground `
+    --resolution-x 1100 `
+    --resolution-y 1100
 }
 ```
 
@@ -116,3 +124,4 @@ The final single-model workflow changes presentation only:
 - manually tuned camera/model/light transforms are reused consistently across
   the four `.blend` files
 - optional one-off plastic color override is available for tests
+- output resolution can be overridden at render time

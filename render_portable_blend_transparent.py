@@ -21,6 +21,8 @@ def parse_args():
     parser.add_argument("--light-preset", choices=["keep", "original", "soft"], default="keep")
     parser.add_argument("--plain-color", nargs=3, type=float, default=None)
     parser.add_argument("--camera-override", default="")
+    parser.add_argument("--resolution-x", type=int, default=0)
+    parser.add_argument("--resolution-y", type=int, default=0)
     parser.add_argument("--save-blend", default="")
     return parser.parse_args(argv)
 
@@ -140,6 +142,13 @@ def apply_camera_override(path):
         camera.data.clip_end = float(data["clip_end"])
 
 
+def apply_resolution(scene, resolution_x, resolution_y):
+    if resolution_x > 0:
+        scene.render.resolution_x = int(resolution_x)
+    if resolution_y > 0:
+        scene.render.resolution_y = int(resolution_y)
+
+
 def main():
     args = parse_args()
     bpy.ops.wm.open_mainfile(filepath=str(Path(args.blend).resolve()))
@@ -149,6 +158,7 @@ def main():
     apply_light_preset(args.light_preset)
     apply_plain_color(args.plain_color)
     apply_camera_override(args.camera_override)
+    apply_resolution(scene, args.resolution_x, args.resolution_y)
 
     output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
