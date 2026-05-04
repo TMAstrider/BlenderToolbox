@@ -112,6 +112,39 @@ foreach ($item in $items) {
 }
 ```
 
+## Batch Launcher
+
+For multiple tuned model folders, use:
+
+```powershell
+python .\portable_render_batch_from_list.py `
+  --list ".\render_presets\portable_noshadow_render_list.csv" `
+  --output-root ".\renders" `
+  --resolution-x 1100 `
+  --resolution-y 1100
+```
+
+Or run the wrapper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_portable_render_batch.ps1
+```
+
+CSV format:
+
+```csv
+dataset,model,output_dir,prefix,rendered
+manifold,Armadillo__407456ef,renders/portable_Armadillo__407456ef_noshadow_final,Armadillo__407456ef,done
+```
+
+Columns:
+
+- `dataset`: dataset key, consistent with `meshes/dataset_map.json`
+- `model`: model folder/name
+- `output_dir`: folder containing the four generated `.blend` files
+- `prefix`: filename prefix for `{prefix}_plastic.blend`, `{prefix}_contour.blend`, etc.
+- `rendered`: optional bookkeeping column
+
 ## What Changed Compared With The Portable Base
 
 The base portable algorithm was not changed.
