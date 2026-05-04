@@ -41,18 +41,31 @@ def norm_str(value):
     return (value or "").strip()
 
 
-def resolve_output_dir(row: dict, repo_root: Path, output_root: Path, dataset_map: dict) -> Path:
+def resolve_model_roots(row: dict, repo_root: Path, output_root: Path) -> list[Path]:
     explicit = norm_str(row.get("output_dir"))
     if explicit:
         p = Path(explicit)
-        return p if p.is_absolute() else (repo_root / p).resolve()
+        return [p if p.is_absolute() else (repo_root / p).resolve()]
 
     dataset = norm_str(row.get("dataset"))
     model = norm_str(row.get("model"))
-    method = norm_str(row.get("method")) or norm_str(row.get("target")) or "ours"
-    if not dataset or not model:
-        raise ValueError("Each row needs either output_dir or dataset+model.")
-    return (output_root / dataset / model / method).resolve()
+    if not model:
+        raise ValueError("Each row needs a model.")
+    if dataset:
+        return [(output_root / dataset / model).resolve()]
+    return sorted(p.resolve() for p in output_root.glob(f"*/{model}") if p.is_dir())
+
+
+def resolve_render_dirs(model_root: Path, prefix: str) -> list[Path]:
+    if not model_root.exists():
+        return []
+    if (model_root / f"{prefix}_plastic.blend").exists():
+        return [model_root]
+    return sorted(
+        p.resolve()
+        for p in model_root.iterdir()
+        if p.is_dir() and (p / f"{prefix}_plastic.blend").exists()
+    )
 
 
 def resolve_prefix(row: dict) -> str:
@@ -156,32 +169,46 @@ def main():
         if rendered == "done" and args.skip_rendered_done:
             continue
 
-        output_dir = resolve_output_dir(row, repo_root, output_root, dataset_map)
         prefix = resolve_prefix(row)
-        source_blend = resolve_source_blend(output_dir, prefix, row)
-
-        if not source_blend.exists():
-            print(f"[skip] missing source blend: {source_blend}")
+        model_roots = resolve_model_roots(row, repo_root, output_root)
+        if not model_roots:
+            print(f"[skip] no render model root found for: {model}")
             continue
 
-        output_dir.mkdir(parents=True, exist_ok=True)
-        sync_targets = [
-            output_dir / f"{prefix}_contour.blend",
-            output_dir / f"{prefix}_nonmanifold_edges.blend",
-            output_dir / f"{prefix}_nonmanifold_regions.blend",
-        ]
-        sync_layout(repo_root, blender_exe, sync_script, source_blend, sync_targets)
-        cleanup_blend_backups(output_dir, prefix)
-
-        for item in ITEMS:
-            blend = output_dir / f"{prefix}_{item}.blend"
-            png = output_dir / f"{prefix}_{item}.png"
-            if args.skip_existing and png.exists():
+        rendered_any = False
+        for model_root in model_roots:
+            render_dirs = resolve_render_dirs(model_root, prefix)
+            if not render_dirs:
+                print(f"[skip] no method folders with {prefix}_plastic.blend under: {model_root}")
                 continue
-            render_one(repo_root, blender_exe, render_script, blend, png, args.resolution_x, args.resolution_y)
 
-        cleanup_blend_backups(output_dir, prefix)
-        print(f"[done] {dataset}/{model} -> {output_dir}")
+            for output_dir in render_dirs:
+                source_blend = resolve_source_blend(output_dir, prefix, row)
+                if not source_blend.exists():
+                    print(f"[skip] missing source blend: {source_blend}")
+                    continue
+
+                sync_targets = [
+                    output_dir / f"{prefix}_contour.blend",
+                    output_dir / f"{prefix}_nonmanifold_edges.blend",
+                    output_dir / f"{prefix}_nonmanifold_regions.blend",
+                ]
+                sync_layout(repo_root, blender_exe, sync_script, source_blend, sync_targets)
+                cleanup_blend_backups(output_dir, prefix)
+
+                for item in ITEMS:
+                    blend = output_dir / f"{prefix}_{item}.blend"
+                    png = output_dir / f"{prefix}_{item}.png"
+                    if args.skip_existing and png.exists():
+                        continue
+                    render_one(repo_root, blender_exe, render_script, blend, png, args.resolution_x, args.resolution_y)
+
+                cleanup_blend_backups(output_dir, prefix)
+                rendered_any = True
+                print(f"[done] {dataset or '*'} / {model} -> {output_dir}")
+
+        if not rendered_any:
+            print(f"[skip] no renderable method directory for: {model}")
 
 
 if __name__ == "__main__":

@@ -133,25 +133,29 @@ powershell -ExecutionPolicy Bypass -File .\run_portable_render_batch.ps1
 CSV format:
 
 ```csv
-dataset,model,method,prefix,rendered
-manifold,Armadillo__407456ef,ours,Armadillo__407456ef,done
+model,rendered
+Armadillo__407456ef,done
 ```
 
 Columns:
 
-- `dataset`: dataset key, consistent with `meshes/dataset_map.json`
 - `model`: model folder/name
-- `method`: output method folder, for example `ours`
-- `prefix`: filename prefix for `{prefix}_plastic.blend`, `{prefix}_contour.blend`, etc.
 - `rendered`: optional bookkeeping column
 
-Output directory is inferred as:
+Output directories are inferred by scanning:
 
 ```text
-renders/<dataset>/<model>/<method>
+renders/*/<model>/*
 ```
 
-For example:
+Every method folder containing `{model}_plastic.blend` is rendered. For example,
+this row:
+
+```text
+Armadillo__407456ef
+```
+
+will render folders such as:
 
 ```text
 renders/manifold/Armadillo__407456ef/ours
