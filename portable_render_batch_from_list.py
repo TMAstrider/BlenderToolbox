@@ -22,6 +22,7 @@ def parse_args():
     p.add_argument("--resolution-x", type=int, default=1100)
     p.add_argument("--resolution-y", type=int, default=1100)
     p.add_argument("--skip-existing", action="store_true")
+    p.add_argument("--skip-rendered-done", action="store_true")
     return p.parse_args()
 
 
@@ -48,15 +49,10 @@ def resolve_output_dir(row: dict, repo_root: Path, output_root: Path, dataset_ma
 
     dataset = norm_str(row.get("dataset"))
     model = norm_str(row.get("model"))
+    method = norm_str(row.get("method")) or norm_str(row.get("target")) or "ours"
     if not dataset or not model:
         raise ValueError("Each row needs either output_dir or dataset+model.")
-
-    ds = dataset_map.get(dataset, {})
-    if isinstance(ds, dict):
-        subdir = ds.get("output_subdir", dataset)
-    else:
-        subdir = dataset
-    return (output_root / subdir / model).resolve()
+    return (output_root / dataset / model / method).resolve()
 
 
 def resolve_prefix(row: dict) -> str:
@@ -157,7 +153,7 @@ def main():
         dataset = norm_str(row.get("dataset"))
         model = norm_str(row.get("model"))
         rendered = norm_str(row.get("rendered")).lower()
-        if rendered == "done" and args.skip_existing:
+        if rendered == "done" and args.skip_rendered_done:
             continue
 
         output_dir = resolve_output_dir(row, repo_root, output_root, dataset_map)

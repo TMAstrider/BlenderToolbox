@@ -1,2 +1,2 @@
-dataset,model,output_dir,prefix,rendered
-manifold,Armadillo__407456ef,renders/portable_Armadillo__407456ef_noshadow_final,Armadillo__407456ef,done
+dataset,model,method,prefix,rendered
+manifold,Armadillo__407456ef,ours,Armadillo__407456ef,done

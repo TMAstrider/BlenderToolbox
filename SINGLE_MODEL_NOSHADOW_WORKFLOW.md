@@ -133,17 +133,29 @@ powershell -ExecutionPolicy Bypass -File .\run_portable_render_batch.ps1
 CSV format:
 
 ```csv
-dataset,model,output_dir,prefix,rendered
-manifold,Armadillo__407456ef,renders/portable_Armadillo__407456ef_noshadow_final,Armadillo__407456ef,done
+dataset,model,method,prefix,rendered
+manifold,Armadillo__407456ef,ours,Armadillo__407456ef,done
 ```
 
 Columns:
 
 - `dataset`: dataset key, consistent with `meshes/dataset_map.json`
 - `model`: model folder/name
-- `output_dir`: folder containing the four generated `.blend` files
+- `method`: output method folder, for example `ours`
 - `prefix`: filename prefix for `{prefix}_plastic.blend`, `{prefix}_contour.blend`, etc.
 - `rendered`: optional bookkeeping column
+
+Output directory is inferred as:
+
+```text
+renders/<dataset>/<model>/<method>
+```
+
+For example:
+
+```text
+renders/manifold/Armadillo__407456ef/ours
+```
 
 ## What Changed Compared With The Portable Base
 
