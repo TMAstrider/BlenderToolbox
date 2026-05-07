@@ -3,6 +3,7 @@ import argparse
 import sys
 
 import bpy
+from mathutils import Matrix
 
 
 def parse_args():
@@ -53,10 +54,13 @@ def capture_source(source_path):
     for obj in scene.objects:
         if obj.type != "LIGHT":
             continue
+        relative_matrix = camera.matrix_world.inverted() @ obj.matrix_world
         lights[base_name(obj.name)] = {
             "location": obj.location.copy(),
             "rotation_euler": obj.rotation_euler.copy(),
             "scale": obj.scale.copy(),
+            "matrix_world": obj.matrix_world.copy(),
+            "relative_matrix": relative_matrix.copy(),
             "energy": float(obj.data.energy),
             "size": float(getattr(obj.data, "size", 0.0)),
         }
@@ -118,27 +122,42 @@ def apply_subject_transform(scene, state):
     subject.rotation_euler = state["rotation_euler"]
     subject.scale = state["scale"]
 
-    # Curve overlays are generated in subject local coordinates, so matching
-    # their object transform keeps non-manifold edge highlights registered.
+    # Edge overlay curve points are generated in subject local coordinates.
+    # Keep the curve as a child with identity local transform so it follows
+    # the subject instead of preserving its old world-space position.
     for obj in scene.objects:
         if obj.type == "CURVE" and "nonmanifold_edge_overlay" in obj.name:
-            obj.location = state["location"]
+            obj.parent = subject
+            obj.matrix_parent_inverse = Matrix.Identity(4)
+            obj.location = (0.0, 0.0, 0.0)
             obj.rotation_mode = "XYZ"
-            obj.rotation_euler = state["rotation_euler"]
-            obj.scale = state["scale"]
+            obj.rotation_euler = (0.0, 0.0, 0.0)
+            obj.scale = (1.0, 1.0, 1.0)
 
 
 def apply_lights(scene, lights):
+    camera = scene.camera
     for obj in scene.objects:
         if obj.type != "LIGHT":
             continue
         state = lights.get(base_name(obj.name))
         if state is None:
             continue
-        obj.location = state["location"]
-        obj.rotation_mode = "XYZ"
-        obj.rotation_euler = state["rotation_euler"]
-        obj.scale = state["scale"]
+        relative_matrix = state.get("relative_matrix")
+        if camera is not None and relative_matrix is not None:
+            obj.parent = camera
+            obj.matrix_parent_inverse = Matrix.Identity(4)
+            loc, rot, scale = relative_matrix.decompose()
+            obj.location = loc
+            obj.rotation_mode = "XYZ"
+            obj.rotation_euler = rot.to_euler("XYZ")
+            obj.scale = scale
+        else:
+            obj.parent = None
+            obj.location = state["location"]
+            obj.rotation_mode = "XYZ"
+            obj.rotation_euler = state["rotation_euler"]
+            obj.scale = state["scale"]
         obj.data.energy = state["energy"]
         if hasattr(obj.data, "size"):
             obj.data.size = state["size"]

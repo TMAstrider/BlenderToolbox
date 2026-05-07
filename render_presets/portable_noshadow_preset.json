@@ -1,14 +1,52 @@
 {
   "description": "Portable no-shadow batch render preset. Edit datasets/methods to choose what gets rendered.",
   "output_root": "renders",
+  "auto_generate_blends": true,
+  "force_regenerate_blends": false,
+  "inherit_existing_layout_on_regenerate": true,
+  "render_on_generate": false,
+  "parallel_jobs": 4,
+  "parallel_generate_blends": false,
+  "force_render_all": false,
+  "force_render_models": [],
+  "render_items": ["plastic"],
+  "samples": 96,
+  "distance_percentile": 100,
+  "pointcloud": {
+    "point_size": 0.006,
+    "color": [0.58, 0.78, 0.9]
+  },
   "resolution": {
     "x": 1100,
     "y": 1100
   },
   "datasets": {
     "manifold": {
-      "enabled": true,
-      "methods": ["ours", "nsh", "multipull"]
+      "enabled": false,
+      "methods": ["ours", "nsh", "multipull"],
+      "render_items": ["plastic"],
+      "layout_source_method": "ours",
+      "model_name_map": {
+        "Armadillo__407456ef": "Armadillo"
+      },
+      "method_mesh_files": {
+        "ours": "ours_mls.ply",
+        "nsh": "nsh.ply",
+        "multipull": "multipull.ply"
+      },
+      "mesh_ranking": ["plastic", "gt_pointcloud", "multipull", "nsh", "ours"]
+    },
+    "deepfashion": {
+      "enabled": false,
+      "methods": ["ours", "capudf", "deudf_dcudf"],
+      "render_items": ["plastic"],
+      "layout_source_method": "ours",
+      "method_mesh_files": {
+        "ours": "ours_mls.ply",
+        "capudf": "capudf.ply",
+        "deudf_dcudf": "deudf_dcudf.ply"
+      },
+      "mesh_ranking": ["plastic", "gt_pointcloud", "capudf", "deudf_dcudf", "ours"]
     },
     "scene": {
       "enabled": false,
@@ -17,16 +55,39 @@
       ]
     },
     "medial_skeleton": {
-      "enabled": false,
-      "methods": [
-        "ours"
-      ]
+      "enabled": true,
+      "methods": ["ours", "deudf_dcudf", "mind"],
+      "render_items": ["plastic", "nonmanifold_edges", "closeup_nonmanifold_edges", "closeup_plastic"],
+      "layout_source_method": "ours",
+      "item_sync_sources": {
+        "closeup_nonmanifold_edges": "closeup_plastic"
+      },
+      "method_mesh_files": {
+        "ours": "ours_base_config.ply",
+        "deudf_dcudf": "deudf_dcudf.ply",
+        "mind": "mind.ply"
+      },
+      "mesh_ranking": ["gt_pointcloud", "deudf_dcudf", "mind", "ours"],
+      
+      "strip_labels": {
+        "gt_pointcloud": "GT",
+        "deudf_dcudf": "DCUDF",
+        "mind": "MIND",
+        "ours": "Ours"
+      }
     },
     "gt": {
       "enabled": false,
-      "methods": [
-        "ours"
-      ]
+      "methods": ["gt_mesh", "dcudf", "mind", "ours"],
+      "render_items": ["contour", "plastic", "nonmanifold_edges", "nonmanifold_regions"],
+      "layout_source_method": "ours",
+      "method_mesh_files": {
+        "gt_mesh": "gt_mesh.ply",
+        "dcudf": "deudf.ply",
+        "mind": "mind.ply",
+        "ours": "ours_mls.ply"
+      },
+      "mesh_ranking": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "ours"]
     }
   }
 }

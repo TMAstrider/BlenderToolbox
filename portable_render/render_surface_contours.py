@@ -8,7 +8,7 @@ import time
 import bmesh
 import bpy
 import numpy as np
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 
 CONDA_SITE_PACKAGES = Path(r"C:\ProgramData\anaconda3\envs\blender\Lib\site-packages")
@@ -23,26 +23,28 @@ DEFAULT_CAMERA_FIT_MARGIN = 0.82
 
 LIGHT_RIG_LOCAL = {
     "key": {
-        "location": (-5.758, 4.784, -4.888),
+        "location": (-5.57764, 5.44754, 1.07495),
         "energy": 1600.0,
         "size": 6.0,
     },
     "fill": {
-        "location": (1.666, 0.801, -3.573),
+        "location": (2.05262, 1.79599, 2.14947),
         "energy": 16.0,
         "size": 8.6,
     },
     "top_back": {
-        "location": (1.578, 6.019, -8.324),
+        "location": (1.45246, 6.61704, -2.96957),
         "energy": 8.0,
         "size": 6.2,
     },
     "front_left": {
-        "location": (-5.941, 3.710, -7.929),
+        "location": (-5.93662, 4.13149, -1.85315),
         "energy": 100.0,
         "size": 4.4,
     },
 }
+
+ITEMS = ("contour", "plastic", "nonmanifold_edges", "nonmanifold_regions")
 
 def parse_args():
     argv = sys.argv
@@ -153,6 +155,18 @@ def parse_args():
         type=str,
         default="",
         help="Optional JSON file containing a manually tuned camera transform.",
+    )
+    parser.add_argument(
+        "--save-only",
+        action="store_true",
+        help="Save the generated .blend scenes without rendering PNG outputs.",
+    )
+    parser.add_argument(
+        "--items",
+        nargs="+",
+        choices=ITEMS,
+        default=list(ITEMS),
+        help="Which scene variants to generate.",
     )
     return parser.parse_args(argv)
 
@@ -1184,7 +1198,7 @@ def create_nonmanifold_edge_overlay(mesh_obj, edge_pairs, radius=0.014):
     curve_obj = bpy.data.objects.new("nonmanifold_edge_overlay", curve_data)
     bpy.context.collection.objects.link(curve_obj)
     curve_obj.parent = mesh_obj
-    curve_obj.matrix_parent_inverse = mesh_obj.matrix_world.inverted()
+    curve_obj.matrix_parent_inverse = Matrix.Identity(4)
 
     edge_material = build_nonmanifold_edge_material()
     curve_data.materials.append(edge_material)
@@ -1214,6 +1228,7 @@ def render_still(output_path):
 
 def main():
     args = parse_args()
+    requested_items = set(args.items or ITEMS)
     (
         output_path,
         plain_output_path,
@@ -1268,99 +1283,134 @@ def main():
 
     place_lights_relative_to_camera(lights, camera_obj, look_target=look_target)
 
-    if not args.distance_file:
-        raise ValueError(
-            "Current workflow requires --distance-file. "
-            "Compute robust heat distances first with compute_heat_distances.py."
-        )
-
     mesh = mesh_obj.data
     verts = np.array([tuple(v.co) for v in mesh.vertices], dtype=float)
     triangles = np.array([tuple(p.vertices) for p in mesh.polygons], dtype=int)
     nonmanifold_edges = find_nonmanifold_edges(triangles)
     face_region_ids, region_count = compute_face_regions(triangles, nonmanifold_edges)
 
-    geodesic_start = time.perf_counter()
-    distances, distance_path = load_precomputed_distances(args.distance_file)
-    geodesic_elapsed = time.perf_counter() - geodesic_start
-    if len(distances) != len(verts):
-        raise ValueError(
-            f"Distance count mismatch: file has {len(distances)} values but mesh has {len(verts)} vertices."
-        )
-    source_idx = -1
-    color_attr_name = "geo_dist_color"
-    line_attr_name = "geo_dist_line"
+    distances = None
+    distance_path = None
+    geodesic_elapsed = None
+    source_idx = None
+    color_attr_name = None
+    line_attr_name = None
     region_attr_name = "nonmanifold_region_color"
-    store_distance_attributes(
-        mesh_obj,
-        distances,
-        color_attr_name,
-        line_attr_name,
-        upper_percentile=args.distance_percentile,
-    )
-    store_region_attributes(mesh_obj, face_region_ids, region_attr_name)
-    if args.unlit:
-        contour_material = build_surface_contour_unlit_material(
+
+    if "contour" in requested_items:
+        if not args.distance_file:
+            raise ValueError(
+                "Contour generation requires --distance-file. "
+                "Compute robust heat distances first with compute_heat_distances.py."
+            )
+        geodesic_start = time.perf_counter()
+        distances, distance_path = load_precomputed_distances(args.distance_file)
+        geodesic_elapsed = time.perf_counter() - geodesic_start
+        if len(distances) != len(verts):
+            raise ValueError(
+                f"Distance count mismatch: file has {len(distances)} values but mesh has {len(verts)} vertices."
+            )
+        source_idx = -1
+        color_attr_name = "geo_dist_color"
+        line_attr_name = "geo_dist_line"
+        store_distance_attributes(
+            mesh_obj,
+            distances,
             color_attr_name,
             line_attr_name,
-            line_density=args.line_density,
-            line_width=args.line_width,
+            upper_percentile=args.distance_percentile,
         )
+    store_region_attributes(mesh_obj, face_region_ids, region_attr_name)
+    contour_material = None
+    if "contour" in requested_items:
+        if args.unlit:
+            contour_material = build_surface_contour_unlit_material(
+                color_attr_name,
+                line_attr_name,
+                line_density=args.line_density,
+                line_width=args.line_width,
+            )
+        else:
+            contour_material = build_surface_contour_material(
+                mesh_obj,
+                color_attr_name,
+                line_attr_name,
+                line_density=args.line_density,
+                line_width=args.line_width,
+            )
+    if args.unlit:
         plain_material = build_plain_unlit_material()
     else:
-        contour_material = build_surface_contour_material(
-            mesh_obj,
-            color_attr_name,
-            line_attr_name,
-            line_density=args.line_density,
-            line_width=args.line_width,
-        )
         plain_material = build_plain_plastic_material()
     region_material = build_region_partition_material(region_attr_name)
     nonmanifold_overlay = create_nonmanifold_edge_overlay(mesh_obj, nonmanifold_edges)
 
-    assign_single_material(mesh_obj, contour_material)
-    set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=False)
-    bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
-    contour_render_elapsed = render_still(output_path)
+    contour_render_elapsed = None
+    plain_render_elapsed = None
+    nonmanifold_render_elapsed = None
+    regions_render_elapsed = None
 
-    assign_single_material(mesh_obj, plain_material)
-    set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=False)
-    bpy.ops.wm.save_as_mainfile(filepath=str(plain_blend_path))
-    plain_render_elapsed = render_still(plain_output_path)
+    if "contour" in requested_items:
+        assign_single_material(mesh_obj, contour_material)
+        set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=False)
+        bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
+        contour_render_elapsed = None if args.save_only else render_still(output_path)
 
-    assign_single_material(mesh_obj, plain_material)
-    set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=True)
-    bpy.ops.wm.save_as_mainfile(filepath=str(nonmanifold_blend_path))
-    nonmanifold_render_elapsed = render_still(nonmanifold_output_path)
+    if "plastic" in requested_items:
+        assign_single_material(mesh_obj, plain_material)
+        set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=False)
+        bpy.ops.wm.save_as_mainfile(filepath=str(plain_blend_path))
+        plain_render_elapsed = None if args.save_only else render_still(plain_output_path)
 
-    assign_single_material(mesh_obj, region_material)
-    set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=False)
-    bpy.ops.wm.save_as_mainfile(filepath=str(regions_blend_path))
-    regions_render_elapsed = render_still(regions_output_path)
+    if "nonmanifold_edges" in requested_items:
+        assign_single_material(mesh_obj, plain_material)
+        set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=True)
+        bpy.ops.wm.save_as_mainfile(filepath=str(nonmanifold_blend_path))
+        nonmanifold_render_elapsed = None if args.save_only else render_still(nonmanifold_output_path)
 
-    print(f"Distance mode: precomputed_file")
-    print(f"Distance file: {distance_path}")
-    print(f"Source vertex: {source_idx}")
+    if "nonmanifold_regions" in requested_items:
+        assign_single_material(mesh_obj, region_material)
+        set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=False)
+        bpy.ops.wm.save_as_mainfile(filepath=str(regions_blend_path))
+        regions_render_elapsed = None if args.save_only else render_still(regions_output_path)
+
+    if distance_path is not None:
+        print(f"Distance mode: precomputed_file")
+        print(f"Distance file: {distance_path}")
+        print(f"Source vertex: {source_idx}")
+        print(f"Geodesic solve time: {geodesic_elapsed:.4f} s")
+    else:
+        print("Distance mode: skipped")
     print(f"Camera mode: {camera_mode}")
     print(f"Camera override: {camera_override['_path'] if camera_override else 'auto_fit'}")
     print(f"Distance support vertex count: {len(verts)}")
     print(f"Distance support face count: {len(triangles)}")
     print(f"Non-manifold edge count (>=3 incident faces): {len(nonmanifold_edges)}")
     print(f"Non-manifold flood regions: {region_count}")
-    print(f"Geodesic solve time: {geodesic_elapsed:.4f} s")
-    print(f"Contour render time: {contour_render_elapsed:.4f} s")
-    print(f"Plain plastic render time: {plain_render_elapsed:.4f} s")
-    print(f"Non-manifold render time: {nonmanifold_render_elapsed:.4f} s")
-    print(f"Region render time: {regions_render_elapsed:.4f} s")
-    print(f"Saved contour image: {output_path}")
-    print(f"Saved plain image: {plain_output_path}")
-    print(f"Saved non-manifold image: {nonmanifold_output_path}")
-    print(f"Saved region image: {regions_output_path}")
-    print(f"Saved contour scene: {blend_path}")
-    print(f"Saved plain scene: {plain_blend_path}")
-    print(f"Saved non-manifold scene: {nonmanifold_blend_path}")
-    print(f"Saved region scene: {regions_blend_path}")
+    print(f"Generated items: {', '.join(sorted(requested_items))}")
+    if args.save_only:
+        print("Render mode: save_only")
+    else:
+        if contour_render_elapsed is not None:
+            print(f"Contour render time: {contour_render_elapsed:.4f} s")
+            print(f"Saved contour image: {output_path}")
+        if plain_render_elapsed is not None:
+            print(f"Plain plastic render time: {plain_render_elapsed:.4f} s")
+            print(f"Saved plain image: {plain_output_path}")
+        if nonmanifold_render_elapsed is not None:
+            print(f"Non-manifold render time: {nonmanifold_render_elapsed:.4f} s")
+            print(f"Saved non-manifold image: {nonmanifold_output_path}")
+        if regions_render_elapsed is not None:
+            print(f"Region render time: {regions_render_elapsed:.4f} s")
+            print(f"Saved region image: {regions_output_path}")
+    if "contour" in requested_items:
+        print(f"Saved contour scene: {blend_path}")
+    if "plastic" in requested_items:
+        print(f"Saved plain scene: {plain_blend_path}")
+    if "nonmanifold_edges" in requested_items:
+        print(f"Saved non-manifold scene: {nonmanifold_blend_path}")
+    if "nonmanifold_regions" in requested_items:
+        print(f"Saved region scene: {regions_blend_path}")
 
 
 if __name__ == "__main__":

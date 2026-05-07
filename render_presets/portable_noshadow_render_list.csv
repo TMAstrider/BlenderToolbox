@@ -1,2 +1,25 @@
-model,rendered
-Armadillo__407456ef,done
+dataset,model,rank
+# manifold
+manifold,Armadillo__407456ef,1
+manifold,dragon_vrip,2
+manifold,cat,3
+manifold,goathead,4
+
+# deepfashion
+deepfashion,19-1,1
+deepfashion,25-2,2
+deepfashion,76-2,3
+deepfashion,89-1,4
+deepfashion,222-2,5
+deepfashion,354-4,6
+
+# gt
+gt,GT_72224,
+gt,GT_tree
+gt,GT_00001726,
+gt,GT_00003987
+
+# medial_skeleton
+medial_skeleton,38464,1
+medial_skeleton,0174,2
+medial_skeleton,0117,3

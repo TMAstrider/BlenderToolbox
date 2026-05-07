@@ -29,8 +29,8 @@ For final single-model figures:
 - Remove contact shadows.
 - Keep the manually tuned camera/model/light layout from the current
   `plastic.blend`.
-- Sync that layout to `contour`, `nonmanifold_edges`, and
-  `nonmanifold_regions` before rendering the final four images.
+- Sync that layout to all four generated `.blend` files before rendering the
+  final four images.
 
 The current Armadillo working folder is:
 
@@ -131,20 +131,28 @@ powershell -ExecutionPolicy Bypass -File .\run_portable_render_batch.ps1
 CSV format:
 
 ```csv
-model,rendered
-Armadillo__407456ef,done
+model
+Armadillo__407456ef
 ```
 
 Columns:
 
 - `model`: model folder/name
-- `rendered`: optional bookkeeping column
 
 The preset controls datasets, methods, output root, and resolution:
 
 ```json
 {
   "output_root": "renders",
+  "auto_generate_blends": true,
+  "force_regenerate_blends": false,
+  "inherit_existing_layout_on_regenerate": true,
+  "render_on_generate": false,
+  "parallel_jobs": 3,
+  "parallel_generate_blends": false,
+  "force_render_all": true,
+  "force_render_models": [],
+  "render_items": ["contour", "plastic", "nonmanifold_edges", "nonmanifold_regions"],
   "resolution": { "x": 1100, "y": 1100 },
   "datasets": {
     "manifold": {
@@ -157,6 +165,53 @@ The preset controls datasets, methods, output root, and resolution:
     }
   }
 }
+```
+
+Useful preset switches:
+
+- `parallel_jobs`: number of concurrent Blender render processes.
+- `parallel_generate_blends`: also parallelize first-time `.blend` generation.
+- `force_render_all`: rerender selected PNGs even if they already exist.
+- `force_render_models`: rerender selected models even if their PNGs already
+  exist, for example `["Armadillo__407456ef"]`.
+- `render_items`: render only selected outputs, for example `["plastic"]`.
+- `auto_generate_blends`: create missing `.blend` files from the dataset mesh.
+- `render_on_generate`: render immediately after creating missing `.blend`
+  files. Keep this `false` when you want to manually tune the generated
+  `plastic.blend` first.
+- `force_regenerate_blends`: rebuild `.blend` files from the source mesh even
+  when they already exist.
+- `inherit_existing_layout_on_regenerate`: before force-regenerating, copy the
+  current layout source `plastic.blend`; after regeneration, sync that old
+  camera/model transform/light setup onto the new `.blend` files. This is the
+  normal mode when the source `.ply` changed but the view should stay the same.
+
+The source mesh is read only when generating or force-regenerating `.blend`
+files. Final PNG rendering opens the existing `.blend` and uses the mesh stored
+inside that scene; it does not re-read the original `.ply`.
+
+For an existing tuned model whose source `.ply` changed, set:
+
+```json
+"force_regenerate_blends": true,
+"inherit_existing_layout_on_regenerate": true
+```
+
+Run the batch once, then set `force_regenerate_blends` back to `false`. The new
+mesh and heat-distance data are rebuilt from the source path, while the old
+layout is reused.
+
+To force PNG rendering for only a few models without touching the rest, set:
+
+```json
+"force_render_all": false,
+"force_render_models": ["Armadillo__407456ef", "dragon_vrip"]
+```
+
+The same can be passed on the command line:
+
+```powershell
+python .\portable_render_batch_from_list.py --force-render-models Armadillo__407456ef dragon_vrip
 ```
 
 For each model in the CSV, output directories are inferred from the enabled
