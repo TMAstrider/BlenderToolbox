@@ -20,3 +20,6 @@ blendertoolbox.egg-info/*
 renders/
 render_presets/
 meshes/
+debug*/
+mind_render_set/world/*
+mind_render_set/
