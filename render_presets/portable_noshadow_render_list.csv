@@ -14,12 +14,27 @@ deepfashion,222-2,5
 deepfashion,354-4,6
 
 # gt
-gt,GT_72224,
-gt,GT_tree
-gt,GT_00001726,
-gt,GT_00003987
+gt,GT_72224,1
+gt,GT_00000003,2
+gt,GT_00001726,3
+gt,GT_00003987,4
+gt,GT_00000814,5
+gt,GT_00001515,6
+gt,GT_00001617,7
+gt,GT_00000373,8
+gt,GT_cup,7
+gt,GT_kleinbottle,8 
+gt,GT_taxi
+gt,GT_00001275,2
+gt,GT_00000004,3
+gt,GT_00000005,
+
 
 # medial_skeleton
 medial_skeleton,38464,1
 medial_skeleton,0174,2
 medial_skeleton,0117,3
+medial_skeleton,0060,4
+medial_skeleton,0144,5
+medial_skeleton,0152,6
+medial_skeleton,cube,7

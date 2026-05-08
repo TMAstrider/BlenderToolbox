@@ -24,8 +24,12 @@
     "manifold": {
       "enabled": false,
       "methods": ["ours", "nsh", "multipull"],
-      "render_items": ["plastic"],
+      "render_items": ["plastic", "closeup_plastic"],
       "layout_source_method": "ours",
+      "pointcloud": {
+        "point_size": 0.006,
+        "color": [0.58, 0.78, 0.9]
+      },
       "model_name_map": {
         "Armadillo__407456ef": "Armadillo"
       },
@@ -34,19 +38,29 @@
         "nsh": "nsh.ply",
         "multipull": "multipull.ply"
       },
-      "mesh_ranking": ["plastic", "gt_pointcloud", "multipull", "nsh", "ours"]
+      "mesh_ranking_by_item": {
+        "plastic": ["gt_pointcloud", "multipull", "nsh", "ours"],
+        "closeup_plastic": ["gt_pointcloud", "multipull", "nsh", "ours"]
+      }
     },
     "deepfashion": {
       "enabled": false,
       "methods": ["ours", "capudf", "deudf_dcudf"],
-      "render_items": ["plastic"],
+      "render_items": ["plastic", "closeup_plastic"],
       "layout_source_method": "ours",
+      "pointcloud": {
+        "point_size": 0.006,
+        "color": [0.58, 0.78, 0.9]
+      },
       "method_mesh_files": {
         "ours": "ours_mls.ply",
         "capudf": "capudf.ply",
         "deudf_dcudf": "deudf_dcudf.ply"
       },
-      "mesh_ranking": ["plastic", "gt_pointcloud", "capudf", "deudf_dcudf", "ours"]
+      "mesh_ranking_by_item": {
+        "plastic": ["gt_pointcloud", "capudf", "deudf_dcudf", "ours"],
+        "closeup_plastic": ["gt_pointcloud", "capudf", "deudf_dcudf", "ours"]
+      }
     },
     "scene": {
       "enabled": false,
@@ -55,10 +69,14 @@
       ]
     },
     "medial_skeleton": {
-      "enabled": true,
+      "enabled": false,
       "methods": ["ours", "deudf_dcudf", "mind"],
-      "render_items": ["plastic", "nonmanifold_edges", "closeup_nonmanifold_edges", "closeup_plastic"],
-      "layout_source_method": "ours",
+      "render_items": ["plastic", "nonmanifold_edges", "closeup_nonmanifold_edges", "closeup_plastic", "nonmanifold_regions"],
+      "layout_source_method": "gt_pointcloud",
+      "pointcloud": {
+        "point_size": 0.01,
+        "color": [0.58, 0.78, 0.9]
+      },
       "item_sync_sources": {
         "closeup_nonmanifold_edges": "closeup_plastic"
       },
@@ -67,8 +85,13 @@
         "deudf_dcudf": "deudf_dcudf.ply",
         "mind": "mind.ply"
       },
-      "mesh_ranking": ["gt_pointcloud", "deudf_dcudf", "mind", "ours"],
-      
+      "mesh_ranking_by_item": {
+        "plastic": ["gt_pointcloud", "deudf_dcudf", "mind", "ours"],
+        "nonmanifold_edges": ["gt_pointcloud", "deudf_dcudf", "mind", "ours"],
+        "closeup_plastic": ["gt_pointcloud", "deudf_dcudf", "mind", "ours"],
+        "closeup_nonmanifold_edges": ["gt_pointcloud", "deudf_dcudf", "mind", "ours"],
+        "nonmanifold_regions": ["gt_pointcloud", "deudf_dcudf", "mind", "ours"]
+      },
       "strip_labels": {
         "gt_pointcloud": "GT",
         "deudf_dcudf": "DCUDF",
@@ -77,17 +100,27 @@
       }
     },
     "gt": {
-      "enabled": false,
+      "enabled": true,
       "methods": ["gt_mesh", "dcudf", "mind", "ours"],
-      "render_items": ["contour", "plastic", "nonmanifold_edges", "nonmanifold_regions"],
+      "render_items": ["plastic", "nonmanifold_edges", " closeup_nonmanifold_edges", "closeup_plastic", "nonmanifold_regions"],
       "layout_source_method": "ours",
+      "pointcloud": {
+        "point_size": 0.006,
+        "color": [0.58, 0.78, 0.9]
+      },
       "method_mesh_files": {
         "gt_mesh": "gt_mesh.ply",
-        "dcudf": "deudf.ply",
+        "dcudf": "deudf_dcudf.ply",
         "mind": "mind.ply",
-        "ours": "ours_mls.ply"
+        "ours": "ours_base_config.ply"
       },
-      "mesh_ranking": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "ours"]
+      "mesh_ranking_by_item": {
+        "plastic": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "ours"],
+        "nonmanifold_edges": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "ours"],
+        "closeup_plastic": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "ours"],
+        "closeup_nonmanifold_edges": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "ours"],
+        "nonmanifold_regions": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "ours"]
+      }
     }
   }
 }
