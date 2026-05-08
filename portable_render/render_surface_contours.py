@@ -457,6 +457,17 @@ def place_lights_relative_to_camera(lights, camera_obj, look_target=DEFAULT_LOOK
         lx, ly, lz = (float(v) for v in spec["location"])
         light_obj.location = camera_obj.location + right * lx + up * ly + view_dir * (-lz)
         look_at(light_obj, tuple(target_vec))
+        bpy.context.view_layer.update()
+        # Store the rig in camera-local space so manual camera orbiting keeps
+        # lighting visually stable instead of leaving lights behind in world space.
+        relative_matrix = camera_obj.matrix_world.inverted() @ light_obj.matrix_world
+        light_obj.parent = camera_obj
+        light_obj.matrix_parent_inverse = Matrix.Identity(4)
+        loc, rot, scale = relative_matrix.decompose()
+        light_obj.location = loc
+        light_obj.rotation_mode = "XYZ"
+        light_obj.rotation_euler = rot.to_euler("XYZ")
+        light_obj.scale = scale
 
 
 def create_monkey_mesh():

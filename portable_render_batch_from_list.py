@@ -856,7 +856,9 @@ def main():
             if not source_blend.exists():
                 print(f"[skip] missing source blend: {source_blend}")
                 continue
-            sync_layout(repo_root, blender_exe, sync_script, source_blend, sync_targets)
+            sync_targets = [target for target in sync_targets if target.resolve() != source_blend.resolve()]
+            if sync_targets:
+                sync_layout(repo_root, blender_exe, sync_script, source_blend, sync_targets)
         cleanup_blend_backups(output_dir, prefix)
 
         generated_this_run = str(output_dir) in generated_dirs
