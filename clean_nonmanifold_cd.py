@@ -35,6 +35,12 @@ def parse_args():
     p.add_argument("--output",     required=True)
     p.add_argument("--samples-per-face", type=int, default=10,
                    help="Number of uniform samples per face for CD computation")
+    p.add_argument("--sigma", type=float, default=0.0,
+                   help="Robust outlier threshold: delete components with "
+                        "CD-L1 > median + sigma * 1.4826 * MAD. "
+                        "Recommended: 2.0. 0 (default) = topology-only mode.")
+    p.add_argument("--min-faces", type=int, default=0,
+                   help="Also delete components with fewer than this many faces (0=disabled).")
     p.add_argument("--export-debug", default="",
                    help="Export every component as PLY with status (kept/deleted/protected)")
     p.add_argument("--seed", type=int, default=42)
@@ -244,44 +250,61 @@ def main():
         comp_info.append((cd, idx, len(comp), len(comp_verts), len(samples), area))
         print(f"   comp {idx:03d}: CD-L1={cd:.6f}, {len(comp)} faces, {len(comp_verts)} verts, area={area:.3f}")
 
-    # 4. Build component -> non-manifold edges map
-    print("\n4. Building component-edge adjacency...")
-    comp_nm_edges = build_component_edge_map(faces, components, nm_edges)
-
-    # 5. Rank by CD-L1 (worst = highest CD first) and iteratively delete
-    print("\n5. Iterative deletion (worst CD-L1 first)...")
-    comp_info.sort(key=lambda x: x[0], reverse=True)  # worst first
     deleted = set()
     protected = set()
-    total_faces = len(faces)
-    active_nm_edges = set(nm_edges)  # edges that are still non-manifold
 
-    for rank, (cd, ci, nf, nv, ns, area) in enumerate(comp_info):
-        if not active_nm_edges:
-            break
+    if args.sigma > 0:
+        # --- Robust outlier mode: median + sigma * 1.4826 * MAD ---
+        print(f"\n4. Robust outlier filtering (sigma={args.sigma})...")
+        cds = np.array([info[0] for info in comp_info])
+        median_cd = float(np.median(cds))
+        mad = float(np.median(np.abs(cds - median_cd)))
+        threshold = median_cd + args.sigma * 1.4826 * mad
+        print(f"   median={median_cd:.6f}  MAD={mad:.6f}  threshold={threshold:.6f}")
 
-        # protect large components (>30% of total faces)
-        if nf > 0.30 * total_faces:
-            protected.add(ci)
-            print(f"   rank {rank:03d}: PROTECT comp {ci:03d} (CD-L1={cd:.6f}, {nf} faces, "
-                  f"{100*nf/total_faces:.1f}% of total)")
-            continue
+        for cd, ci, nf, nv, ns, area in comp_info:
+            if args.min_faces > 0 and nf <= args.min_faces:
+                print(f"   SKIP  comp {ci:03d} (CD-L1={cd:.6f}, {nf} faces <= min-faces, not filtered)")
+            elif cd > threshold:
+                deleted.add(ci)
+                print(f"   DELETE comp {ci:03d} (CD-L1={cd:.6f} > {threshold:.6f}, {nf} faces)")
+            else:
+                print(f"   KEEP  comp {ci:03d} (CD-L1={cd:.6f}, {nf} faces)")
+    else:
+        # --- Original topology-aware mode: delete worst touching NM edges ---
+        print("\n4. Building component-edge adjacency...")
+        comp_nm_edges = build_component_edge_map(faces, components, nm_edges)
 
-        # check if this component touches any active non-manifold edge
-        touches = comp_nm_edges[ci] & active_nm_edges
-        if touches:
-            deleted.add(ci)
-            active_nm_edges -= touches
-            print(f"   rank {rank:03d}: DELETE comp {ci:03d} (CD-L1={cd:.6f}, {nf} faces, "
-                  f"resolves {len(touches)} NM edges)")
-        else:
-            print(f"   rank {rank:03d}: KEEP  comp {ci:03d} (CD-L1={cd:.6f}, {nf} faces, "
-                  f"no active NM edges)")
+        print("\n5. Iterative deletion (worst CD-L1 first)...")
+        comp_info.sort(key=lambda x: x[0], reverse=True)
+        total_faces = len(faces)
+        active_nm_edges = set(nm_edges)
+
+        for rank, (cd, ci, nf, nv, ns, area) in enumerate(comp_info):
+            if not active_nm_edges:
+                break
+
+            if nf > 0.30 * total_faces:
+                protected.add(ci)
+                print(f"   rank {rank:03d}: PROTECT comp {ci:03d} (CD-L1={cd:.6f}, {nf} faces, "
+                      f"{100*nf/total_faces:.1f}% of total)")
+                continue
+
+            touches = comp_nm_edges[ci] & active_nm_edges
+            if touches:
+                deleted.add(ci)
+                active_nm_edges -= touches
+                print(f"   rank {rank:03d}: DELETE comp {ci:03d} (CD-L1={cd:.6f}, {nf} faces, "
+                      f"resolves {len(touches)} NM edges)")
+            else:
+                print(f"   rank {rank:03d}: KEEP  comp {ci:03d} (CD-L1={cd:.6f}, {nf} faces, "
+                      f"no active NM edges)")
 
     # 6. Rebuild mesh from kept components
     print(f"\n6. Rebuilding mesh...")
     print(f"   Protected: {len(protected)}, Deleted: {len(deleted)} / {len(components)} components")
-    print(f"   Remaining NM edges: {len(active_nm_edges)}")
+    if args.sigma == 0:
+        print(f"   Remaining NM edges: {len(active_nm_edges)}")
 
     kept_faces_idx = sorted(fi for ci in range(len(components)) if ci not in deleted for fi in components[ci])
     new_faces = faces[kept_faces_idx]
