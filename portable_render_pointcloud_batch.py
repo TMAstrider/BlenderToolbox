@@ -84,6 +84,11 @@ def enabled_datasets(preset: dict) -> dict:
 
 
 def wants_gt_pointcloud(cfg: dict, item: str) -> bool:
+    ranking_by_item = cfg.get("mesh_ranking_by_item")
+    if isinstance(ranking_by_item, dict):
+        values = ranking_by_item.get(item)
+        if isinstance(values, list) and "gt_pointcloud" in [str(v) for v in values]:
+            return True
     ranking = cfg.get("mesh_ranking")
     if isinstance(ranking, list) and "gt_pointcloud" in [str(v) for v in ranking]:
         return True

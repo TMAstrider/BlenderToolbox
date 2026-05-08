@@ -83,7 +83,20 @@ def dataset_item(preset: dict, dataset_cfg: dict, args) -> str:
     return default_item(preset, args)
 
 
+def ranking_by_item(dataset_cfg: dict, item: str) -> list[str] | None:
+    mapping = dataset_cfg.get("mesh_ranking_by_item")
+    if not isinstance(mapping, dict):
+        return None
+    values = mapping.get(item)
+    if not isinstance(values, list) or not values:
+        return None
+    return [str(v) for v in values]
+
+
 def method_order(dataset_cfg: dict, item: str) -> list[str]:
+    per_item = ranking_by_item(dataset_cfg, item)
+    if per_item:
+        return per_item
     ranking = dataset_cfg.get("mesh_ranking")
     if isinstance(ranking, list) and ranking:
         values = [str(v) for v in ranking]
@@ -113,6 +126,18 @@ def label_for(dataset_cfg: dict, method: str) -> str:
         "gt_pointcloud": "GT PC",
     }
     return pretty.get(method, method)
+
+
+def resolve_method_png(model_root: Path, model: str, method: str, item: str) -> Path | None:
+    method_dir = method_dir_name(method)
+    base_dir = model_root / method_dir
+    candidates = [base_dir / f"{model}_{item}.png"]
+    if method_dir == "gt_pointcloud" and item != "plastic":
+        candidates.append(base_dir / f"{model}_plastic.png")
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
 
 
 def read_rank(row: dict) -> int | None:
@@ -210,9 +235,8 @@ def main():
             paths: list[tuple[Path, str]] = []
             missing: list[str] = []
             for method in method_order(cfg, item):
-                method_dir = method_dir_name(method)
-                png = model_root / method_dir / f"{model}_{item}.png"
-                if png.exists():
+                png = resolve_method_png(model_root, model, method, item)
+                if png is not None:
                     paths.append((png, label_for(cfg, method)))
                 else:
                     missing.append(method)
