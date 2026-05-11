@@ -1,40 +1,48 @@
-dataset,model,rank
+dataset,model,rank,prefix
 # manifold
-manifold,Armadillo__407456ef,1
-manifold,dragon_vrip,2
-manifold,cat,3
-manifold,goathead,4
+manifold,Armadillo__407456ef,1,
+manifold,dragon_vrip,2,
+manifold,cat,3,
+manifold,goathead,4,
 
 # deepfashion
-deepfashion,19-1,1
-deepfashion,25-2,2
-deepfashion,76-2,3
-deepfashion,89-1,4
-deepfashion,222-2,5
-deepfashion,354-4,6
+deepfashion,19-1,1,
+deepfashion,25-2,2,
+deepfashion,76-2,3,
+deepfashion,89-1,4,
+deepfashion,222-2,5,
+deepfashion,354-4,6,
 
 # gt
-gt,GT_72224,1
-gt,GT_00000003,2
-gt,GT_00001726,3
-gt,GT_00003987,4
-gt,GT_00000814,5
-gt,GT_00001515,6
-gt,GT_00001617,7
-gt,GT_00000373,8
-gt,GT_cup,9
-gt,GT_kleinbottle,10
-gt,GT_taxi,11
-gt,GT_00001275,12
-gt,GT_00000004,13
-gt,GT_00000005,14
+gt,GT_72224,1,
+gt,GT_00000003,2,
+gt,GT_00001726,3,
+gt,GT_00003987,4,
+gt,GT_00000814,5,
+gt,GT_00001515,6,
+gt,GT_00001617,7,
+gt,GT_00000373,8,
+gt,GT_cup,9,
+gt,GT_kleinbottle,10,
+gt,GT_taxi,11,
+gt,GT_00001275,12,
+gt,GT_00000004,13,
+gt,GT_00000005,14,
+
+# gt red mark
+gt,GT_72224_red_nonmanifold_mark,-1,GT_72224
+gt,GT_00000003_red_nonmanifold_mark,-1,GT_00000003
+gt,GT_00003987_red_nonmanifold_mark,-1,GT_00003987
+gt,GT_cup_red_nonmanifold_mark,-1,GT_cup
+gt,GT_00000373_red_nonmanifold_mark,-1,GT_00000373
+
 
 
 # medial_skeleton
-medial_skeleton,38464,1
-medial_skeleton,0174,2
-medial_skeleton,0117,3
-medial_skeleton,0060,4
-medial_skeleton,0144,5
-medial_skeleton,0152,6
-medial_skeleton,cube,7
+medial_skeleton,38464,1,
+medial_skeleton,0174,2,
+medial_skeleton,0117,3,
+medial_skeleton,0060,4,
+medial_skeleton,0144,5,
+medial_skeleton,0152,6,
+medial_skeleton,cube,7,

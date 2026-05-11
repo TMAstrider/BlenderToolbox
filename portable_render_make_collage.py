@@ -50,6 +50,16 @@ def norm(value) -> str:
     return (value or "").strip()
 
 
+def resolve_prefix(row: dict) -> str:
+    prefix = norm(row.get("prefix"))
+    if prefix:
+        return prefix
+    model = norm(row.get("model"))
+    if model:
+        return model
+    raise ValueError("Each row needs prefix or model.")
+
+
 def enabled_datasets(preset: dict) -> dict:
     datasets = preset.get("datasets", {})
     if not isinstance(datasets, dict):
@@ -128,12 +138,12 @@ def label_for(dataset_cfg: dict, method: str) -> str:
     return pretty.get(method, method)
 
 
-def resolve_method_png(model_root: Path, model: str, method: str, item: str) -> Path | None:
+def resolve_method_png(model_root: Path, prefix: str, method: str, item: str) -> Path | None:
     method_dir = method_dir_name(method)
     base_dir = model_root / method_dir
-    candidates = [base_dir / f"{model}_{item}.png"]
+    candidates = [base_dir / f"{prefix}_{item}.png"]
     if method_dir == "gt_pointcloud" and item != "plastic":
-        candidates.append(base_dir / f"{model}_plastic.png")
+        candidates.append(base_dir / f"{prefix}_plastic.png")
     for path in candidates:
         if path.exists():
             return path
@@ -222,6 +232,7 @@ def main():
         model = norm(row.get("model"))
         if not model:
             continue
+        prefix = resolve_prefix(row)
         rank = read_rank(row)
         explicit_dataset = norm(row.get("dataset"))
         dataset_items = [(explicit_dataset, datasets[explicit_dataset])] if explicit_dataset in datasets else datasets.items()
@@ -235,7 +246,7 @@ def main():
             paths: list[tuple[Path, str]] = []
             missing: list[str] = []
             for method in method_order(cfg, item):
-                png = resolve_method_png(model_root, model, method, item)
+                png = resolve_method_png(model_root, prefix, method, item)
                 if png is not None:
                     paths.append((png, label_for(cfg, method)))
                 else:

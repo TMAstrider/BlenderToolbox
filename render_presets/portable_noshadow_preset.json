@@ -102,7 +102,7 @@
     },
     "gt": {
       "enabled": true,
-      "methods": ["gt_mesh", "dcudf", "mind", "ours"],
+      "methods": ["gt_mesh", "dcudf", "mind", "dmudf", "ours"],
       "render_items": ["plastic", "nonmanifold_edges", " closeup_nonmanifold_edges", "closeup_plastic", "nonmanifold_regions"],
       "layout_source_method": "ours",
       "pointcloud": {
@@ -113,14 +113,23 @@
         "gt_mesh": "gt_mesh.ply",
         "dcudf": "deudf_dcudf.ply",
         "mind": "mind.ply",
+        "dmudf": "dmudf.ply",
         "ours": "ours_base_config.ply"
       },
       "mesh_ranking_by_item": {
-        "plastic": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "ours"],
-        "nonmanifold_edges": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "ours"],
-        "closeup_plastic": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "ours"],
-        "closeup_nonmanifold_edges": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "ours"],
-        "nonmanifold_regions": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "ours"]
+        "plastic": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "dmudf", "ours"],
+        "nonmanifold_edges": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "dmudf", "ours"],
+        "closeup_plastic": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "dmudf", "ours"],
+        "closeup_nonmanifold_edges": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "dmudf", "ours"],
+        "nonmanifold_regions": ["gt_pointcloud", "gt_mesh", "dcudf", "mind", "dmudf", "ours"]
+      },
+      "strip_labels": {
+        "gt_pointcloud": "GT PC",
+        "gt_mesh": "GT",
+        "dcudf": "DCUDF",
+        "mind": "MIND",
+        "dmudf": "DMUDF",
+        "ours": "Ours"
       }
     }
   }
