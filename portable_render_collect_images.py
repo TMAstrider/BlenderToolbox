@@ -29,7 +29,8 @@ def parse_args():
     p.add_argument("--output-root", default="")
     p.add_argument("--render-items", nargs="+", default=None)
     p.add_argument("--models", nargs="+", default=None)
-    p.add_argument("--no-strips", action="store_true")
+    p.add_argument("--include-model-strips", action="store_true")
+    p.add_argument("--no-ranked-strips", action="store_true")
     p.add_argument("--crop-padding", type=int, default=0)
     return p.parse_args()
 
@@ -86,14 +87,14 @@ def normalize_render_items(value) -> list[str]:
     return deduped
 
 
-def enabled_datasets(preset: dict) -> dict[str, dict]:
+def configured_datasets(preset: dict) -> dict[str, dict]:
     datasets = preset.get("datasets", {})
     if not isinstance(datasets, dict):
         return {}
     return {
         str(name): cfg
         for name, cfg in datasets.items()
-        if isinstance(cfg, dict) and cfg.get("enabled", True)
+        if isinstance(cfg, dict)
     }
 
 
@@ -197,11 +198,12 @@ def main():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_root = source_root.with_name(source_root.name + "_images_only") / timestamp
 
-    datasets = enabled_datasets(preset)
+    datasets = configured_datasets(preset)
     model_filters = {name.lower() for name in split_names(args.models)}
     copied = 0
     missing = 0
     copied_targets: set[Path] = set()
+    datasets_to_export: set[str] = set()
 
     for row in rows:
         model = norm(row.get("model"))
@@ -220,6 +222,7 @@ def main():
             model_root = source_root / dataset / model
             if not model_root.exists():
                 continue
+            datasets_to_export.add(dataset)
 
             items = dataset_render_items(preset, cfg, args)
             for item in items:
@@ -233,7 +236,7 @@ def main():
                         copied_targets.add(copied_path)
                         copied += 1
 
-                if not args.no_strips:
+                if args.include_model_strips:
                     strip = model_root / f"strip_{item}.png"
                     copied_path = None
                     if strip.exists():
@@ -241,6 +244,17 @@ def main():
                     if copied_path is not None and copied_path not in copied_targets:
                         copied_targets.add(copied_path)
                         copied += 1
+
+    if not args.no_ranked_strips:
+        for dataset in sorted(datasets_to_export):
+            dataset_root = source_root / dataset
+            if not dataset_root.exists():
+                continue
+            for ranked in sorted(dataset_root.glob("ranked_strip_*.png")):
+                copied_path = copy_png(ranked, source_root, output_root, args.crop_padding)
+                if copied_path is not None and copied_path not in copied_targets:
+                    copied_targets.add(copied_path)
+                    copied += 1
 
     print(f"[collect] source={source_root}")
     print(f"[collect] output={output_root}")
