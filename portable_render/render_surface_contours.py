@@ -122,6 +122,12 @@ def parse_args():
     parser.add_argument("--resolution-x", type=int, default=1600)
     parser.add_argument("--resolution-y", type=int, default=1100)
     parser.add_argument(
+        "--ground-clearance",
+        type=float,
+        default=GROUND_CLEARANCE,
+        help="Vertical gap kept between the mesh bottom and the ground plane.",
+    )
+    parser.add_argument(
         "--line-density",
         type=float,
         default=8.5,
@@ -535,7 +541,7 @@ def import_mesh(mesh_path):
     return obj
 
 
-def normalize_mesh_geometry(mesh_obj, fit_size):
+def normalize_mesh_geometry(mesh_obj, fit_size, ground_clearance):
     mesh = mesh_obj.data
     coords = np.array([tuple(v.co) for v in mesh.vertices], dtype=float)
     bbox_min = coords.min(axis=0)
@@ -550,7 +556,7 @@ def normalize_mesh_geometry(mesh_obj, fit_size):
     mesh.update()
     shifted_coords = np.array([tuple(v.co) for v in mesh.vertices], dtype=float)
     shifted_bbox_min = shifted_coords.min(axis=0)
-    z_shift = (GROUND_Z + GROUND_CLEARANCE) - float(shifted_bbox_min[2])
+    z_shift = (GROUND_Z + ground_clearance) - float(shifted_bbox_min[2])
     if abs(z_shift) > 1e-10:
         for vert in mesh.vertices:
             vert.co.z += z_shift
@@ -594,7 +600,7 @@ def fit_camera_to_mesh(camera_obj, mesh_obj, look_target=DEFAULT_LOOK_TARGET, ma
     look_at(camera_obj, look_target)
 
 
-def prepare_mesh(mesh_obj, fit_size, apply_subsurf):
+def prepare_mesh(mesh_obj, fit_size, ground_clearance, apply_subsurf):
     bpy.context.view_layer.objects.active = mesh_obj
     mesh_obj.select_set(True)
     bpy.ops.object.shade_flat()
@@ -603,7 +609,7 @@ def prepare_mesh(mesh_obj, fit_size, apply_subsurf):
     # modifier application and later edits do not fail.
     mesh_obj.data = mesh_obj.data.copy()
 
-    normalize_mesh_geometry(mesh_obj, fit_size)
+    normalize_mesh_geometry(mesh_obj, fit_size, ground_clearance)
 
     if apply_subsurf:
         subsurf = mesh_obj.modifiers.new(name="Subsurf", type="SUBSURF")
@@ -1267,7 +1273,12 @@ def main():
             mesh_obj = create_cube_mesh()
         else:
             mesh_obj = create_monkey_mesh()
-    prepare_mesh(mesh_obj, args.fit_size, apply_subsurf=not bool(args.mesh))
+    prepare_mesh(
+        mesh_obj,
+        args.fit_size,
+        args.ground_clearance,
+        apply_subsurf=not bool(args.mesh),
+    )
 
     look_target = DEFAULT_LOOK_TARGET
     fit_margin = DEFAULT_CAMERA_FIT_MARGIN

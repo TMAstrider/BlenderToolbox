@@ -38,7 +38,10 @@ def parse_args():
     p.add_argument("--portable-render-script", default=r"portable_render\render_surface_contours.py")
     p.add_argument("--resolution-x", type=int, default=0)
     p.add_argument("--resolution-y", type=int, default=0)
+    p.add_argument("--ground-clearance", type=float, default=None)
     p.add_argument("--parallel-jobs", type=int, default=0)
+    p.add_argument("--parallel-generate-blends", action="store_true")
+    p.add_argument("--no-parallel-generate-blends", action="store_true")
     p.add_argument("--render-items", nargs="+", default=None)
     p.add_argument("--force-render-models", nargs="+", default=None)
     p.add_argument("--force-render-all", action="store_true")
@@ -49,6 +52,7 @@ def parse_args():
     p.add_argument("--no-inherit-existing-layout-on-regenerate", action="store_true")
     p.add_argument("--render-on-generate", action="store_true")
     p.add_argument("--no-render-on-generate", action="store_true")
+    p.add_argument("--generate-only", action="store_true")
     p.add_argument("--skip-existing", action="store_true")
     return p.parse_args()
 
@@ -103,6 +107,12 @@ def preset_parallel_jobs(preset: dict, args) -> int:
         return args.parallel_jobs
     value = int(preset.get("parallel_jobs", 1))
     return max(1, min(value, max(1, os.cpu_count() or 1)))
+
+
+def preset_ground_clearance(preset: dict, args) -> float:
+    if args.ground_clearance is not None:
+        return float(args.ground_clearance)
+    return float(preset.get("ground_clearance", 0.015))
 
 
 def preset_force_render_all(preset: dict, args) -> bool:
@@ -178,6 +188,14 @@ def preset_force_regenerate_blends(preset: dict, args) -> bool:
     if args.no_force_regenerate_blends:
         return False
     return bool(preset.get("force_regenerate_blends", False))
+
+
+def preset_parallel_generate_blends(preset: dict, args) -> bool:
+    if args.parallel_generate_blends:
+        return True
+    if args.no_parallel_generate_blends:
+        return False
+    return bool(preset.get("parallel_generate_blends", False))
 
 
 def preset_render_on_generate(preset: dict, args) -> bool:
@@ -489,6 +507,7 @@ def generate_initial_blends(
     prefix: str,
     resolution_x: int,
     resolution_y: int,
+    ground_clearance: float,
     samples: int,
     distance_percentile: float,
     items: list[str] | None = None,
@@ -546,6 +565,8 @@ def generate_initial_blends(
         str(distance_percentile),
         "--samples",
         str(samples),
+        "--ground-clearance",
+        str(ground_clearance),
         "--resolution-x",
         str(resolution_x),
         "--resolution-y",
@@ -593,6 +614,7 @@ def generate_requested_blends(
     prefix: str,
     resolution_x: int,
     resolution_y: int,
+    ground_clearance: float,
     samples: int,
     distance_percentile: float,
     items: list[str] | None = None,
@@ -615,6 +637,7 @@ def generate_requested_blends(
             prefix,
             resolution_x,
             resolution_y,
+            ground_clearance,
             samples,
             distance_percentile,
             standard_items,
@@ -683,11 +706,12 @@ def main():
     output_root_arg = args.output_root or preset.get("output_root", "renders")
     output_root = (repo_root / output_root_arg).resolve()
     resolution_x, resolution_y = preset_resolution(preset, args)
+    ground_clearance = preset_ground_clearance(preset, args)
     parallel_jobs = preset_parallel_jobs(preset, args)
     samples = int(preset.get("samples", 96))
     distance_percentile = float(preset.get("distance_percentile", 100))
     auto_generate = bool(preset.get("auto_generate_blends", True))
-    parallel_generate = bool(preset.get("parallel_generate_blends", False))
+    parallel_generate = preset_parallel_generate_blends(preset, args)
     force_regenerate_blends = preset_force_regenerate_blends(preset, args)
     inherit_existing_layout_on_regenerate = preset_inherit_existing_layout_on_regenerate(preset, args)
     force_render_all = preset_force_render_all(preset, args)
@@ -703,8 +727,11 @@ def main():
     print(
         f"[config] jobs={parallel_jobs}, force_render_all={force_render_all}, "
         f"force_regenerate_blends={force_regenerate_blends}, "
+        f"parallel_generate_blends={parallel_generate}, "
+        f"ground_clearance={ground_clearance}, "
         f"inherit_existing_layout_on_regenerate={inherit_existing_layout_on_regenerate}, "
         f"render_on_generate={render_on_generate}, "
+        f"generate_only={args.generate_only}, "
         f"render_items={','.join(render_items)}, "
         f"force_render_models={','.join(sorted(force_render_models)) or '-'}"
     )
@@ -741,7 +768,7 @@ def main():
                         "prefix": prefix,
                         "force_render": forced_model,
                         "render_items": dataset_render_items(preset, dataset_name, render_items, args),
-                        "layout_source_override": None,
+                        "layout_source_overrides": {},
                         "regenerated_from_existing_layout": False,
                         "skip": "",
                     }
@@ -767,18 +794,24 @@ def main():
             continue
 
         if force_regenerate_blends and inherit_existing_layout_on_regenerate:
-            old_source_blend = layout_source_blend(
-                preset,
-                unit["dataset_name"],
-                unit["model_root"],
-                output_dir,
-                prefix,
+            source_items = dedupe_keep_order(
+                [item_sync_source_item(preset, unit["dataset_name"], item) for item in unit["render_items"]]
             )
-            if old_source_blend.exists():
-                backup = output_dir / f".{prefix}_{unit['method']}_layout_before_regen.blend"
+            for source_item in source_items:
+                old_source_blend = layout_source_blend(
+                    preset,
+                    unit["dataset_name"],
+                    unit["model_root"],
+                    output_dir,
+                    prefix,
+                    source_item=source_item,
+                )
+                if not old_source_blend.exists():
+                    continue
+                backup = output_dir / f".{prefix}_{unit['method']}_{source_item}_layout_before_regen.blend"
                 backup.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(old_source_blend, backup)
-                unit["layout_source_override"] = backup.resolve()
+                unit["layout_source_overrides"][source_item] = backup.resolve()
                 unit["regenerated_from_existing_layout"] = True
                 temporary_layout_backups.append(backup.resolve())
                 print(f"[layout-backup] {old_source_blend} -> {backup}")
@@ -805,6 +838,7 @@ def main():
                     prefix,
                     resolution_x,
                     resolution_y,
+                    ground_clearance,
                     samples,
                     distance_percentile,
                     generate_items,
@@ -842,8 +876,9 @@ def main():
             continue
 
         for source_item, sync_targets in sync_sources.items():
-            if source_item == "plastic" and unit["layout_source_override"] is not None:
-                source_blend = unit["layout_source_override"]
+            override = unit["layout_source_overrides"].get(source_item)
+            if override is not None:
+                source_blend = override
             else:
                 source_blend = layout_source_blend(
                     preset,
@@ -862,6 +897,9 @@ def main():
         cleanup_blend_backups(output_dir, prefix)
 
         generated_this_run = str(output_dir) in generated_dirs
+        if args.generate_only:
+            print(f"[generate-only] skip render phase: {output_dir}")
+            continue
         if generated_this_run and not render_on_generate and not unit["regenerated_from_existing_layout"]:
             print(f"[hold] generated this run, waiting for manual edit: {output_dir}")
             continue
