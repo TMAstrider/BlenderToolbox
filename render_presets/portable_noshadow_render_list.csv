@@ -22,12 +22,12 @@ gt,GT_00000814,5
 gt,GT_00001515,6
 gt,GT_00001617,7
 gt,GT_00000373,8
-gt,GT_cup,7
-gt,GT_kleinbottle,8 
-gt,GT_taxi
-gt,GT_00001275,2
-gt,GT_00000004,3
-gt,GT_00000005,
+gt,GT_cup,9
+gt,GT_kleinbottle,10
+gt,GT_taxi,11
+gt,GT_00001275,12
+gt,GT_00000004,13
+gt,GT_00000005,14
 
 
 # medial_skeleton
