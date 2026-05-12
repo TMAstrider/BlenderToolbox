@@ -19,6 +19,7 @@ def parse_args():
     parser.add_argument("--ground-clearance", type=float, default=0.04)
     parser.add_argument("--hide-ground", action="store_true")
     parser.add_argument("--light-preset", choices=["keep", "original", "soft"], default="keep")
+    parser.add_argument("--material-preset", choices=["keep", "redmark"], default="keep")
     parser.add_argument("--plain-color", nargs=3, type=float, default=None)
     parser.add_argument("--camera-override", default="")
     parser.add_argument("--resolution-x", type=int, default=0)
@@ -120,6 +121,102 @@ def apply_plain_color(rgb):
             base.default_value = color
 
 
+def build_redmark_material(attr_name="Col"):
+    mat = bpy.data.materials.new("surface_redmark_preview")
+    mat.use_nodes = True
+    mat.use_backface_culling = False
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+
+    for node in list(nodes):
+        if node.name not in {"Material Output"}:
+            nodes.remove(node)
+
+    output = nodes["Material Output"]
+
+    color_attr = nodes.new("ShaderNodeAttribute")
+    color_attr.attribute_name = attr_name
+    color_attr.location = (-980, 20)
+
+    separate = nodes.new("ShaderNodeSeparateColor")
+    separate.location = (-760, 20)
+
+    red_minus_green = nodes.new("ShaderNodeMath")
+    red_minus_green.operation = "SUBTRACT"
+    red_minus_green.location = (-520, 100)
+
+    red_mask = nodes.new("ShaderNodeMath")
+    red_mask.operation = "GREATER_THAN"
+    red_mask.location = (-300, 100)
+    red_mask.inputs[1].default_value = 0.16
+
+    base_rgb = nodes.new("ShaderNodeRGB")
+    base_rgb.location = (-520, -90)
+    base_rgb.outputs[0].default_value = (0.3082, 0.6090, 0.7405, 1.0)
+
+    base_bc = nodes.new("ShaderNodeBrightContrast")
+    base_bc.location = (-300, -90)
+    base_bc.inputs["Bright"].default_value = 0.0
+    base_bc.inputs["Contrast"].default_value = 0.8
+
+    red_sat = nodes.new("ShaderNodeHueSaturation")
+    red_sat.location = (-300, 250)
+    red_sat.inputs["Saturation"].default_value = 1.1
+    red_sat.inputs["Value"].default_value = 1.02
+
+    mix = nodes.new("ShaderNodeMixRGB")
+    mix.blend_type = "MIX"
+    mix.inputs["Fac"].default_value = 0.0
+    mix.location = (-40, 50)
+
+    bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (210, 40)
+    bsdf.inputs["Metallic"].default_value = 0.0
+    bsdf.inputs["Roughness"].default_value = 0.56
+    if "Specular IOR Level" in bsdf.inputs:
+        bsdf.inputs["Specular IOR Level"].default_value = 0.28
+    elif "Specular" in bsdf.inputs:
+        bsdf.inputs["Specular"].default_value = 0.24
+    if "Coat Weight" in bsdf.inputs:
+        bsdf.inputs["Coat Weight"].default_value = 0.02
+    elif "Clearcoat" in bsdf.inputs:
+        bsdf.inputs["Clearcoat"].default_value = 0.02
+    if "Coat Roughness" in bsdf.inputs:
+        bsdf.inputs["Coat Roughness"].default_value = 0.60
+    elif "Clearcoat Roughness" in bsdf.inputs:
+        bsdf.inputs["Clearcoat Roughness"].default_value = 0.60
+    if "Emission Strength" in bsdf.inputs:
+        bsdf.inputs["Emission Strength"].default_value = 0.0
+
+    links.new(color_attr.outputs["Color"], separate.inputs["Color"])
+    links.new(separate.outputs["Red"], red_minus_green.inputs[0])
+    links.new(separate.outputs["Green"], red_minus_green.inputs[1])
+    links.new(red_minus_green.outputs[0], red_mask.inputs[0])
+    links.new(base_rgb.outputs["Color"], base_bc.inputs["Color"])
+    links.new(color_attr.outputs["Color"], red_sat.inputs["Color"])
+    links.new(red_mask.outputs[0], mix.inputs["Fac"])
+    links.new(base_bc.outputs["Color"], mix.inputs["Color1"])
+    links.new(red_sat.outputs["Color"], mix.inputs["Color2"])
+    links.new(mix.outputs["Color"], bsdf.inputs["Base Color"])
+    links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
+    return mat
+
+
+def apply_redmark_material(attr_name="Col"):
+    material = build_redmark_material(attr_name=attr_name)
+    for obj in bpy.context.scene.objects:
+        if obj.type != "MESH":
+            continue
+        if obj.name.lower().startswith("plane"):
+            continue
+        color_attrs = getattr(obj.data, "color_attributes", None)
+        if color_attrs is None or attr_name not in color_attrs:
+            continue
+        obj.data.materials.clear()
+        obj.data.materials.append(material)
+        obj.active_material = material
+
+
 def apply_camera_override(path):
     if not path:
         return
@@ -156,6 +253,8 @@ def main():
     configure_transparent_output(scene)
     adjust_ground(args.ground_clearance, args.hide_ground)
     apply_light_preset(args.light_preset)
+    if args.material_preset == "redmark":
+        apply_redmark_material()
     apply_plain_color(args.plain_color)
     apply_camera_override(args.camera_override)
     apply_resolution(scene, args.resolution_x, args.resolution_y)
