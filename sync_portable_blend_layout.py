@@ -22,6 +22,18 @@ def base_name(name):
     return name.split(".")[0]
 
 
+def vec_tuple(value):
+    return tuple(float(v) for v in value)
+
+
+def matrix_tuple(value):
+    return tuple(tuple(float(v) for v in row) for row in value)
+
+
+def restore_matrix(value):
+    return Matrix(value)
+
+
 def largest_subject_mesh(scene):
     meshes = [
         obj
@@ -56,20 +68,21 @@ def capture_source(source_path):
             continue
         relative_matrix = camera.matrix_world.inverted() @ obj.matrix_world
         lights[base_name(obj.name)] = {
-            "location": obj.location.copy(),
-            "rotation_euler": obj.rotation_euler.copy(),
-            "scale": obj.scale.copy(),
-            "matrix_world": obj.matrix_world.copy(),
-            "relative_matrix": relative_matrix.copy(),
+            "location": vec_tuple(obj.location),
+            "rotation_euler": vec_tuple(obj.rotation_euler),
+            "scale": vec_tuple(obj.scale),
+            "matrix_world": matrix_tuple(obj.matrix_world),
+            "relative_matrix": matrix_tuple(relative_matrix),
             "energy": float(obj.data.energy),
             "size": float(getattr(obj.data, "size", 0.0)),
         }
 
     return {
         "camera": {
-            "location": camera.location.copy(),
-            "rotation_euler": camera.rotation_euler.copy(),
-            "scale": camera.scale.copy(),
+            "location": vec_tuple(camera.location),
+            "rotation_euler": vec_tuple(camera.rotation_euler),
+            "scale": vec_tuple(camera.scale),
+            "matrix_world": matrix_tuple(camera.matrix_world),
             "lens": float(camera.data.lens),
             "shift_x": float(camera.data.shift_x),
             "shift_y": float(camera.data.shift_y),
@@ -81,9 +94,10 @@ def capture_source(source_path):
             "ortho_scale": float(camera.data.ortho_scale),
         },
         "subject": {
-            "location": subject.location.copy(),
-            "rotation_euler": subject.rotation_euler.copy(),
-            "scale": subject.scale.copy(),
+            "location": vec_tuple(subject.location),
+            "rotation_euler": vec_tuple(subject.rotation_euler),
+            "scale": vec_tuple(subject.scale),
+            "matrix_world": matrix_tuple(subject.matrix_world),
         },
         "lights": lights,
         "resolution": (scene.render.resolution_x, scene.render.resolution_y),
@@ -97,6 +111,8 @@ def apply_camera(scene, state):
         camera = bpy.context.object
         scene.camera = camera
 
+    camera.parent = None
+    camera.matrix_parent_inverse = Matrix.Identity(4)
     camera.location = state["location"]
     camera.rotation_mode = "XYZ"
     camera.rotation_euler = state["rotation_euler"]
@@ -110,6 +126,7 @@ def apply_camera(scene, state):
     camera.data.clip_start = state["clip_start"]
     camera.data.clip_end = state["clip_end"]
     camera.data.ortho_scale = state["ortho_scale"]
+    camera.matrix_world = restore_matrix(state["matrix_world"])
 
 
 def apply_subject_transform(scene, state):
@@ -117,10 +134,13 @@ def apply_subject_transform(scene, state):
     if subject is None:
         return
 
+    subject.parent = None
+    subject.matrix_parent_inverse = Matrix.Identity(4)
     subject.location = state["location"]
     subject.rotation_mode = "XYZ"
     subject.rotation_euler = state["rotation_euler"]
     subject.scale = state["scale"]
+    subject.matrix_world = restore_matrix(state["matrix_world"])
 
     # Edge overlay curve points are generated in subject local coordinates.
     # Keep the curve as a child with identity local transform so it follows
@@ -147,7 +167,7 @@ def apply_lights(scene, lights):
         if camera is not None and relative_matrix is not None:
             obj.parent = camera
             obj.matrix_parent_inverse = Matrix.Identity(4)
-            loc, rot, scale = relative_matrix.decompose()
+            loc, rot, scale = restore_matrix(relative_matrix).decompose()
             obj.location = loc
             obj.rotation_mode = "XYZ"
             obj.rotation_euler = rot.to_euler("XYZ")
@@ -158,6 +178,7 @@ def apply_lights(scene, lights):
             obj.rotation_mode = "XYZ"
             obj.rotation_euler = state["rotation_euler"]
             obj.scale = state["scale"]
+            obj.matrix_world = restore_matrix(state["matrix_world"])
         obj.data.energy = state["energy"]
         if hasattr(obj.data, "size"):
             obj.data.size = state["size"]

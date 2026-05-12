@@ -12,6 +12,7 @@ from PIL import Image
 
 ITEM_ALIASES = {
     "closeup_nonmanifold": "closeup_nonmanifold_edges",
+    "closeup_boundary": "closeup_boundary_edges",
 }
 
 METHOD_ALIASES = {
@@ -58,6 +59,16 @@ def load_rows(path: Path) -> list[dict]:
 
 def norm(value) -> str:
     return (value or "").strip()
+
+
+def resolve_prefix(row: dict) -> str:
+    prefix = norm(row.get("prefix"))
+    if prefix:
+        return prefix
+    model = norm(row.get("model"))
+    if model:
+        return model
+    raise ValueError("Each row needs prefix or model.")
 
 
 def split_names(value) -> list[str]:
@@ -146,20 +157,67 @@ def methods_to_collect(dataset_cfg: dict, item: str) -> list[str]:
     return result
 
 
+def methods_to_collect_all(dataset_cfg: dict) -> list[str]:
+    result = []
+    seen = set()
+
+    def add(method: str):
+        if method not in seen:
+            result.append(method)
+            seen.add(method)
+
+    for method in [str(v) for v in dataset_cfg.get("methods", [])]:
+        add(method)
+
+    ranking = dataset_cfg.get("mesh_ranking")
+    if isinstance(ranking, list):
+        for method in ranking:
+            text = str(method)
+            if text:
+                add(text)
+
+    ranking_by_item_map = dataset_cfg.get("mesh_ranking_by_item")
+    if isinstance(ranking_by_item_map, dict):
+        for values in ranking_by_item_map.values():
+            if not isinstance(values, list):
+                continue
+            for method in values:
+                text = str(method)
+                if text:
+                    add(text)
+
+    return result
+
+
 def method_dir_name(method: str) -> str:
     return METHOD_ALIASES.get(method, method)
 
 
-def resolve_method_png(model_root: Path, model: str, method: str, item: str) -> Path | None:
+def resolve_method_png(model_root: Path, prefix: str, method: str, item: str) -> Path | None:
     method_dir = method_dir_name(method)
     base_dir = model_root / method_dir
-    candidates = [base_dir / f"{model}_{item}.png"]
+    candidates = [base_dir / f"{prefix}_{item}.png"]
     if method_dir == "gt_pointcloud" and item != "plastic":
-        candidates.append(base_dir / f"{model}_plastic.png")
+        candidates.append(base_dir / f"{prefix}_plastic.png")
     for path in candidates:
         if path.exists():
             return path
     return None
+
+
+def discover_method_pngs(model_root: Path, prefix: str, method: str, allowed_items: set[str] | None = None) -> list[Path]:
+    method_dir = model_root / method_dir_name(method)
+    if not method_dir.exists():
+        return []
+
+    found = []
+    for path in sorted(method_dir.glob(f"{prefix}_*.png")):
+        suffix = path.stem[len(prefix) + 1 :]
+        item_name = canonical_item_name(suffix)
+        if allowed_items is not None and item_name not in allowed_items:
+            continue
+        found.append(path)
+    return found
 
 
 def copy_png(path: Path, source_root: Path, output_root: Path, crop_padding: int) -> Path | None:
@@ -209,6 +267,7 @@ def main():
         model = norm(row.get("model"))
         if not model:
             continue
+        prefix = resolve_prefix(row)
         if model_filters and model.lower() not in model_filters:
             continue
 
@@ -224,26 +283,35 @@ def main():
                 continue
             datasets_to_export.add(dataset)
 
-            items = dataset_render_items(preset, cfg, args)
-            for item in items:
-                for method in methods_to_collect(cfg, item):
-                    png = resolve_method_png(model_root, model, method, item)
-                    if png is None:
-                        missing += 1
-                        continue
-                    copied_path = copy_png(png, source_root, output_root, args.crop_padding)
-                    if copied_path is not None and copied_path not in copied_targets:
-                        copied_targets.add(copied_path)
-                        copied += 1
+            if args.render_items is None:
+                for method in methods_to_collect_all(cfg):
+                    for png in discover_method_pngs(model_root, prefix, method):
+                        copied_path = copy_png(png, source_root, output_root, args.crop_padding)
+                        if copied_path is not None and copied_path not in copied_targets:
+                            copied_targets.add(copied_path)
+                            copied += 1
+            else:
+                items = dataset_render_items(preset, cfg, args)
+                allowed_items = set(items)
+                for item in items:
+                    for method in methods_to_collect(cfg, item):
+                        png = resolve_method_png(model_root, prefix, method, item)
+                        if png is None:
+                            missing += 1
+                            continue
+                        copied_path = copy_png(png, source_root, output_root, args.crop_padding)
+                        if copied_path is not None and copied_path not in copied_targets:
+                            copied_targets.add(copied_path)
+                            copied += 1
 
-                if args.include_model_strips:
-                    strip = model_root / f"strip_{item}.png"
-                    copied_path = None
-                    if strip.exists():
-                        copied_path = copy_png(strip, source_root, output_root, args.crop_padding)
-                    if copied_path is not None and copied_path not in copied_targets:
-                        copied_targets.add(copied_path)
-                        copied += 1
+                    if args.include_model_strips:
+                        strip = model_root / f"strip_{item}.png"
+                        copied_path = None
+                        if strip.exists():
+                            copied_path = copy_png(strip, source_root, output_root, args.crop_padding)
+                        if copied_path is not None and copied_path not in copied_targets:
+                            copied_targets.add(copied_path)
+                            copied += 1
 
     if not args.no_ranked_strips:
         for dataset in sorted(datasets_to_export):

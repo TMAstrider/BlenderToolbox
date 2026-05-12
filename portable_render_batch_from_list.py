@@ -11,15 +11,17 @@ import subprocess
 import sys
 
 
-STANDARD_ITEMS = ("contour", "plastic", "nonmanifold_edges", "nonmanifold_regions")
-CLOSEUP_ITEMS = ("closeup_plastic", "closeup_nonmanifold_edges")
+STANDARD_ITEMS = ("contour", "plastic", "nonmanifold_edges", "boundary_edges", "nonmanifold_regions")
+CLOSEUP_ITEMS = ("closeup_plastic", "closeup_nonmanifold_edges", "closeup_boundary_edges")
 ITEMS = STANDARD_ITEMS + CLOSEUP_ITEMS
 ITEM_ALIASES = {
     "closeup_nonmanifold": "closeup_nonmanifold_edges",
+    "closeup_boundary": "closeup_boundary_edges",
 }
 ITEM_TEMPLATE = {
     "closeup_plastic": "plastic",
     "closeup_nonmanifold_edges": "nonmanifold_edges",
+    "closeup_boundary_edges": "boundary_edges",
 }
 DEFAULT_BLENDER = r"C:\Program Files\Blender Foundation\Blender 4.5\blender.exe"
 
@@ -320,6 +322,14 @@ def resolve_prefix(row: dict) -> str:
     raise ValueError("Each row needs prefix or model.")
 
 
+def resolve_mesh_path(row: dict, repo_root: Path) -> Path | None:
+    explicit = norm_str(row.get("mesh_path"))
+    if not explicit:
+        return None
+    p = Path(explicit)
+    return p if p.is_absolute() else (repo_root / p).resolve()
+
+
 def model_matches(name: str, patterns: set[str]) -> bool:
     if not patterns:
         return False
@@ -551,6 +561,8 @@ def generate_initial_blends(
         str(output_dir / f"{prefix}_plastic.png"),
         "--nonmanifold-output",
         str(output_dir / f"{prefix}_nonmanifold_edges.png"),
+        "--boundary-output",
+        str(output_dir / f"{prefix}_boundary_edges.png"),
         "--regions-output",
         str(output_dir / f"{prefix}_nonmanifold_regions.png"),
         "--blend",
@@ -559,6 +571,8 @@ def generate_initial_blends(
         str(output_dir / f"{prefix}_plastic.blend"),
         "--nonmanifold-blend",
         str(output_dir / f"{prefix}_nonmanifold_edges.blend"),
+        "--boundary-blend",
+        str(output_dir / f"{prefix}_boundary_edges.blend"),
         "--regions-blend",
         str(output_dir / f"{prefix}_nonmanifold_regions.blend"),
         "--distance-percentile",
@@ -766,6 +780,7 @@ def main():
                         "output_dir": output_dir,
                         "method": output_dir.name,
                         "prefix": prefix,
+                        "mesh_path_override": resolve_mesh_path(row, repo_root),
                         "force_render": forced_model,
                         "render_items": dataset_render_items(preset, dataset_name, render_items, args),
                         "layout_source_overrides": {},
@@ -816,9 +831,11 @@ def main():
                 temporary_layout_backups.append(backup.resolve())
                 print(f"[layout-backup] {old_source_blend} -> {backup}")
 
-        mesh_model = mesh_model_name(preset, unit["dataset_name"], unit["model"])
-        mesh_dir = dataset_mesh_dir(meshes_root, unit["dataset_name"], mesh_model, dataset_map)
-        mesh_path = mesh_dir / method_mesh_file(preset, unit["dataset_name"], unit["method"])
+        mesh_path = unit.get("mesh_path_override")
+        if mesh_path is None:
+            mesh_model = mesh_model_name(preset, unit["dataset_name"], unit["model"])
+            mesh_dir = dataset_mesh_dir(meshes_root, unit["dataset_name"], mesh_model, dataset_map)
+            mesh_path = mesh_dir / method_mesh_file(preset, unit["dataset_name"], unit["method"])
         if not mesh_path.exists():
             unit["skip"] = f"missing mesh: {mesh_path}"
             print(f"[skip] missing mesh for {unit['dataset_name']}/{unit['model']}/{unit['method']}: {mesh_path}")

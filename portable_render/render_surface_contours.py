@@ -44,7 +44,7 @@ LIGHT_RIG_LOCAL = {
     },
 }
 
-ITEMS = ("contour", "plastic", "nonmanifold_edges", "nonmanifold_regions")
+ITEMS = ("contour", "plastic", "nonmanifold_edges", "boundary_edges", "nonmanifold_regions")
 
 def parse_args():
     argv = sys.argv
@@ -105,6 +105,18 @@ def parse_args():
         type=str,
         default="",
         help="Optional output .blend path for the non-manifold edge highlight scene.",
+    )
+    parser.add_argument(
+        "--boundary-output",
+        type=str,
+        default="",
+        help="Optional output PNG path for the combined boundary/non-manifold edge highlight render.",
+    )
+    parser.add_argument(
+        "--boundary-blend",
+        type=str,
+        default="",
+        help="Optional output .blend path for the combined boundary/non-manifold edge highlight scene.",
     )
     parser.add_argument(
         "--regions-output",
@@ -215,6 +227,21 @@ def ensure_output_paths(args):
         nonmanifold_blend_path = nonmanifold_output_path.with_suffix(".blend")
     nonmanifold_blend_path.parent.mkdir(parents=True, exist_ok=True)
 
+    if args.boundary_output:
+        boundary_output_path = Path(args.boundary_output).resolve()
+    else:
+        boundary_name = nonmanifold_output_path.name.replace("_nonmanifold_edges", "_boundary_edges")
+        if boundary_name == nonmanifold_output_path.name:
+            boundary_name = nonmanifold_output_path.stem + "_boundary" + nonmanifold_output_path.suffix
+        boundary_output_path = nonmanifold_output_path.with_name(boundary_name)
+    boundary_output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if args.boundary_blend:
+        boundary_blend_path = Path(args.boundary_blend).resolve()
+    else:
+        boundary_blend_path = boundary_output_path.with_suffix(".blend")
+    boundary_blend_path.parent.mkdir(parents=True, exist_ok=True)
+
     if args.regions_output:
         regions_output_path = Path(args.regions_output).resolve()
     else:
@@ -234,10 +261,12 @@ def ensure_output_paths(args):
         output_path,
         plain_output_path,
         nonmanifold_output_path,
+        boundary_output_path,
         regions_output_path,
         blend_path,
         plain_blend_path,
         nonmanifold_blend_path,
+        boundary_blend_path,
         regions_blend_path,
     )
 
@@ -1022,6 +1051,11 @@ def find_nonmanifold_edges(triangles):
     return [edge for edge, faces in edge_faces.items() if len(faces) >= 3]
 
 
+def find_boundary_edges(triangles):
+    edge_faces = build_edge_face_map(triangles)
+    return [edge for edge, faces in edge_faces.items() if len(faces) == 1]
+
+
 def build_edge_face_map(triangles):
     edge_counts = {}
     for face_idx, tri in enumerate(triangles):
@@ -1117,8 +1151,8 @@ def store_region_attributes(mesh_obj, face_region_ids, attr_name):
     return region_count
 
 
-def build_nonmanifold_edge_material():
-    mat = bpy.data.materials.new("surface_nonmanifold_edges")
+def build_edge_overlay_material(name, color):
+    mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     mat.use_backface_culling = False
     nodes = mat.node_tree.nodes
@@ -1132,11 +1166,19 @@ def build_nonmanifold_edge_material():
 
     emission = nodes.new("ShaderNodeEmission")
     emission.location = (-220, 20)
-    emission.inputs["Color"].default_value = (0.93, 0.34, 0.24, 1.0)
+    emission.inputs["Color"].default_value = color
     emission.inputs["Strength"].default_value = 1.0
 
     links.new(emission.outputs["Emission"], output.inputs["Surface"])
     return mat
+
+
+def build_nonmanifold_edge_material():
+    return build_edge_overlay_material("surface_nonmanifold_edges", (0.93, 0.34, 0.24, 1.0))
+
+
+def build_boundary_edge_material():
+    return build_edge_overlay_material("surface_boundary_edges", (0.62, 0.93, 0.72, 1.0))
 
 
 def build_region_partition_material(color_attr_name):
@@ -1188,14 +1230,14 @@ def build_region_partition_material(color_attr_name):
     return mat
 
 
-def create_nonmanifold_edge_overlay(mesh_obj, edge_pairs, radius=0.014):
+def create_edge_overlay(mesh_obj, edge_pairs, radius=0.014, name="edge_overlay", material=None):
     if not edge_pairs:
         return None
 
     mesh = mesh_obj.data
     verts = [Vector(v.co) for v in mesh.vertices]
 
-    curve_data = bpy.data.curves.new(name="nonmanifold_edge_overlay_curve", type="CURVE")
+    curve_data = bpy.data.curves.new(name=f"{name}_curve", type="CURVE")
     curve_data.dimensions = "3D"
     curve_data.fill_mode = "FULL"
     curve_data.bevel_depth = radius
@@ -1212,16 +1254,36 @@ def create_nonmanifold_edge_overlay(mesh_obj, edge_pairs, radius=0.014):
         spline.use_smooth = True
         spline.order_u = 1
 
-    curve_obj = bpy.data.objects.new("nonmanifold_edge_overlay", curve_data)
+    curve_obj = bpy.data.objects.new(name, curve_data)
     bpy.context.collection.objects.link(curve_obj)
     curve_obj.parent = mesh_obj
     curve_obj.matrix_parent_inverse = Matrix.Identity(4)
 
-    edge_material = build_nonmanifold_edge_material()
+    edge_material = material or build_nonmanifold_edge_material()
     curve_data.materials.append(edge_material)
     curve_obj.visible_shadow = False
     curve_obj.hide_render = True
     return curve_obj
+
+
+def create_nonmanifold_edge_overlay(mesh_obj, edge_pairs, radius=0.014):
+    return create_edge_overlay(
+        mesh_obj,
+        edge_pairs,
+        radius=radius,
+        name="nonmanifold_edge_overlay",
+        material=build_nonmanifold_edge_material(),
+    )
+
+
+def create_boundary_edge_overlay(mesh_obj, edge_pairs, radius=0.014):
+    return create_edge_overlay(
+        mesh_obj,
+        edge_pairs,
+        radius=radius,
+        name="boundary_edge_overlay",
+        material=build_boundary_edge_material(),
+    )
 
 
 def assign_single_material(mesh_obj, material):
@@ -1250,10 +1312,12 @@ def main():
         output_path,
         plain_output_path,
         nonmanifold_output_path,
+        boundary_output_path,
         regions_output_path,
         blend_path,
         plain_blend_path,
         nonmanifold_blend_path,
+        boundary_blend_path,
         regions_blend_path,
     ) = ensure_output_paths(args)
 
@@ -1309,6 +1373,7 @@ def main():
     verts = np.array([tuple(v.co) for v in mesh.vertices], dtype=float)
     triangles = np.array([tuple(p.vertices) for p in mesh.polygons], dtype=int)
     nonmanifold_edges = find_nonmanifold_edges(triangles)
+    boundary_edges = find_boundary_edges(triangles)
     face_region_ids, region_count = compute_face_regions(triangles, nonmanifold_edges)
 
     distances = None
@@ -1366,33 +1431,46 @@ def main():
         plain_material = build_plain_plastic_material()
     region_material = build_region_partition_material(region_attr_name)
     nonmanifold_overlay = create_nonmanifold_edge_overlay(mesh_obj, nonmanifold_edges)
+    boundary_overlay = create_boundary_edge_overlay(mesh_obj, boundary_edges)
 
     contour_render_elapsed = None
     plain_render_elapsed = None
     nonmanifold_render_elapsed = None
+    boundary_render_elapsed = None
     regions_render_elapsed = None
 
     if "contour" in requested_items:
         assign_single_material(mesh_obj, contour_material)
         set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=False)
+        set_nonmanifold_overlay_visible(boundary_overlay, visible=False)
         bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
         contour_render_elapsed = None if args.save_only else render_still(output_path)
 
     if "plastic" in requested_items:
         assign_single_material(mesh_obj, plain_material)
         set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=False)
+        set_nonmanifold_overlay_visible(boundary_overlay, visible=False)
         bpy.ops.wm.save_as_mainfile(filepath=str(plain_blend_path))
         plain_render_elapsed = None if args.save_only else render_still(plain_output_path)
 
     if "nonmanifold_edges" in requested_items:
         assign_single_material(mesh_obj, plain_material)
         set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=True)
+        set_nonmanifold_overlay_visible(boundary_overlay, visible=False)
         bpy.ops.wm.save_as_mainfile(filepath=str(nonmanifold_blend_path))
         nonmanifold_render_elapsed = None if args.save_only else render_still(nonmanifold_output_path)
+
+    if "boundary_edges" in requested_items:
+        assign_single_material(mesh_obj, plain_material)
+        set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=True)
+        set_nonmanifold_overlay_visible(boundary_overlay, visible=True)
+        bpy.ops.wm.save_as_mainfile(filepath=str(boundary_blend_path))
+        boundary_render_elapsed = None if args.save_only else render_still(boundary_output_path)
 
     if "nonmanifold_regions" in requested_items:
         assign_single_material(mesh_obj, region_material)
         set_nonmanifold_overlay_visible(nonmanifold_overlay, visible=False)
+        set_nonmanifold_overlay_visible(boundary_overlay, visible=False)
         bpy.ops.wm.save_as_mainfile(filepath=str(regions_blend_path))
         regions_render_elapsed = None if args.save_only else render_still(regions_output_path)
 
@@ -1408,6 +1486,7 @@ def main():
     print(f"Distance support vertex count: {len(verts)}")
     print(f"Distance support face count: {len(triangles)}")
     print(f"Non-manifold edge count (>=3 incident faces): {len(nonmanifold_edges)}")
+    print(f"Boundary edge count (=1 incident face): {len(boundary_edges)}")
     print(f"Non-manifold flood regions: {region_count}")
     print(f"Generated items: {', '.join(sorted(requested_items))}")
     if args.save_only:
@@ -1422,6 +1501,9 @@ def main():
         if nonmanifold_render_elapsed is not None:
             print(f"Non-manifold render time: {nonmanifold_render_elapsed:.4f} s")
             print(f"Saved non-manifold image: {nonmanifold_output_path}")
+        if boundary_render_elapsed is not None:
+            print(f"Boundary/non-manifold render time: {boundary_render_elapsed:.4f} s")
+            print(f"Saved boundary/non-manifold image: {boundary_output_path}")
         if regions_render_elapsed is not None:
             print(f"Region render time: {regions_render_elapsed:.4f} s")
             print(f"Saved region image: {regions_output_path}")
@@ -1431,6 +1513,8 @@ def main():
         print(f"Saved plain scene: {plain_blend_path}")
     if "nonmanifold_edges" in requested_items:
         print(f"Saved non-manifold scene: {nonmanifold_blend_path}")
+    if "boundary_edges" in requested_items:
+        print(f"Saved boundary scene: {boundary_blend_path}")
     if "nonmanifold_regions" in requested_items:
         print(f"Saved region scene: {regions_blend_path}")
 

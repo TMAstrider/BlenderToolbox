@@ -12,6 +12,11 @@ METHOD_ALIASES = {
     "ours_mls": "ours",
 }
 
+ITEM_ALIASES = {
+    "closeup_nonmanifold": "closeup_nonmanifold_edges",
+    "closeup_boundary": "closeup_boundary_edges",
+}
+
 
 def parse_args():
     p = argparse.ArgumentParser(description="Create portable render strips and ranked collage images.")
@@ -73,9 +78,10 @@ def enabled_datasets(preset: dict) -> dict:
 
 def item_from_render_items(items, fallback: str = "plastic") -> str:
     if isinstance(items, list) and items:
-        return str(items[0])
+        return ITEM_ALIASES.get(str(items[0]), str(items[0]))
     if isinstance(items, str) and items.strip():
-        return items.strip()
+        text = items.strip()
+        return ITEM_ALIASES.get(text, text)
     return fallback
 
 
@@ -87,7 +93,7 @@ def default_item(preset: dict, args) -> str:
 
 def dataset_item(preset: dict, dataset_cfg: dict, args) -> str:
     if args.item:
-        return args.item
+        return ITEM_ALIASES.get(args.item, args.item)
     if "render_items" in dataset_cfg:
         return item_from_render_items(dataset_cfg.get("render_items"))
     return default_item(preset, args)

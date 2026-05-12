@@ -159,10 +159,9 @@ def build_redmark_material(attr_name="Col"):
     base_bc.inputs["Bright"].default_value = 0.0
     base_bc.inputs["Contrast"].default_value = 0.8
 
-    red_sat = nodes.new("ShaderNodeHueSaturation")
-    red_sat.location = (-300, 250)
-    red_sat.inputs["Saturation"].default_value = 1.1
-    red_sat.inputs["Value"].default_value = 1.02
+    red_rgb = nodes.new("ShaderNodeRGB")
+    red_rgb.location = (-300, 250)
+    red_rgb.outputs[0].default_value = (0.93, 0.34, 0.24, 1.0)
 
     mix = nodes.new("ShaderNodeMixRGB")
     mix.blend_type = "MIX"
@@ -193,10 +192,9 @@ def build_redmark_material(attr_name="Col"):
     links.new(separate.outputs["Green"], red_minus_green.inputs[1])
     links.new(red_minus_green.outputs[0], red_mask.inputs[0])
     links.new(base_rgb.outputs["Color"], base_bc.inputs["Color"])
-    links.new(color_attr.outputs["Color"], red_sat.inputs["Color"])
     links.new(red_mask.outputs[0], mix.inputs["Fac"])
     links.new(base_bc.outputs["Color"], mix.inputs["Color1"])
-    links.new(red_sat.outputs["Color"], mix.inputs["Color2"])
+    links.new(red_rgb.outputs["Color"], mix.inputs["Color2"])
     links.new(mix.outputs["Color"], bsdf.inputs["Base Color"])
     links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
     return mat
