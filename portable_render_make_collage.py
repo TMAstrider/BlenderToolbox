@@ -47,7 +47,7 @@ def load_rows(path: Path) -> list[dict]:
         return []
     rows = []
     for row in csv.DictReader(lines):
-        rows.append({str(k).strip(): str(v).strip() for k, v in row.items() if k is not None})
+        rows.append({str(k).strip(): ("" if v is None else str(v).strip()) for k, v in row.items() if k is not None})
     return rows
 
 

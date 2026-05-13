@@ -52,7 +52,7 @@ def load_rows(path: Path) -> list[dict]:
     if not lines:
         return []
     return [
-        {str(k).strip(): str(v).strip() for k, v in row.items() if k is not None}
+        {str(k).strip(): ("" if v is None else str(v).strip()) for k, v in row.items() if k is not None}
         for row in csv.DictReader(lines)
     ]
 
