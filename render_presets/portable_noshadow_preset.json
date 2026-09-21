@@ -9,7 +9,7 @@
   "parallel_generate_blends": false,
   "force_render_all": false,
   "force_render_models": [],
-  "render_items": ["plastic"],
+  "render_items": ["plastic", "nonmanifold_edges", "boundary_edges", "nonmanifold_regions", "closeup_plastic", "closeup_nonmanifold_edges", "closeup_boundary_edges"],
   "samples": 96,
   "distance_percentile": 100,
   "ground_clearance": 0.04,
@@ -70,9 +70,9 @@
       ]
     },
     "medial_skeleton": {
-      "enabled": false,
+      "enabled": true,
       "methods": ["ours", "deudf_dcudf", "mind"],
-      "render_items": ["plastic", "nonmanifold_edges", "closeup_nonmanifold_edges", "closeup_plastic", "nonmanifold_regions"],
+      "render_items": ["plastic", "nonmanifold_edges", "boundary_edges", "nonmanifold_regions", "closeup_plastic", "closeup_nonmanifold_edges", "closeup_boundary_edges"],
       "layout_source_method": "gt_pointcloud",
       "pointcloud": {
         "point_size": 0.01,
@@ -106,7 +106,7 @@
     "gt": {
       "enabled": true,
       "methods": ["gt_mesh", "dcudf", "mind", "dmudf", "ours"],
-      "render_items": ["plastic", "nonmanifold_edges", " closeup_nonmanifold_edges", "closeup_plastic", "nonmanifold_regions"],
+      "render_items": ["plastic", "nonmanifold_edges", "boundary_edges", "nonmanifold_regions", "closeup_plastic", "closeup_nonmanifold_edges", "closeup_boundary_edges"],
       "layout_source_method": "ours",
       "item_sync_sources": {
         "closeup_nonmanifold_edges": "closeup_plastic",

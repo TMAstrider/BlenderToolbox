@@ -28,6 +28,14 @@ gt,GT_taxi,11,
 gt,GT_00001275,12,
 gt,GT_00000004,13,
 gt,GT_00000005,14,
+gt,GT_00001963,15,
+gt,GT_00005608,16,
+gt,GT_robot,17,
+gt,GT_tree,18,
+gt,GT_00000006,19,
+gt,GT_00000074,20,
+gt,GT_00000126_clean,21,
+gt,GT_00000215_clean,22,
 
 # gt red mark
 gt,GT_72224_red_nonmanifold_mark,-1,GT_72224
@@ -46,7 +54,7 @@ medial_skeleton,0060,4,
 medial_skeleton,0144,5,
 medial_skeleton,0152,6,
 medial_skeleton,cube,7,
-
+medial_skeleton,0152_clean,8,
 
 # ablation
 ablation,density_GT_00000001_100k,-1,,meshes/ablation_refine_package_copy_20260511/density_ablation_20260509/GT_00000001_100k.ply
